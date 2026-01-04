@@ -279,19 +279,23 @@ with tab_write:
     # 1. 注入所有新参数
     style_instruction = f"视角：{perspective}。文风：{writing_style}。节奏：{pace_control}。"
     
-    # 2. 强力扩写逻辑
+   # 2. 强力扩写逻辑
     if burst_mode:
         len_ins = f"目标字数：{word_target}+。必须大量描写环境、光影、气味和心理微表情，严禁记流水账。"
     else:
         len_ins = f"字数：{word_target}。"
 
-    # 3. 组装最终指令
+    # 3. 组装最终指令 (加入强制标题铁律)
     sys_p = (
         f"你是由DeepSeek驱动的作家。类型：{novel_type}。\n"
-        f"{style_instruction}\n{ctx}\n"
-        f"【执行要求】\n"
-        f"1. {len_ins}\n"
-        f"2. 禁止输出'好的'，直接写正文。"
+        f"视角：{perspective}。文风：{writing_style}。节奏：{pace_control}。\n"
+        f"{ctx}\n"
+        f"【执行铁律】\n"
+        f"1. **格式强制**：输出的第一行必须是Markdown标题！\n"
+        f"   - 范例：**### 第一章：[自动补全章节名]**\n"
+        f"   - 严禁直接写正文，必须先写标题。\n"
+        f"2. {len_ins}\n"
+        f"3. 严禁输出'好的'，直接开始创作。"
     )
     # === 替换结束 ===
 
@@ -355,14 +359,15 @@ with tab_write:
     # 功能 2：一键复制 (获取最新一条 AI 回复)
     with c_tool2:
         last_ai_msg = ""
+        # 倒序查找最后一条 AI 回复
         for m in reversed(current_msgs):
             if m["role"] == "assistant":
                 last_ai_msg = m["content"]; break
         
         if last_ai_msg:
-            with st.expander("📋 一键复制", expanded=True):
-                st.caption("点击右上角📄图标复制")
-                st.code(last_ai_msg, language=None)
+            with st.expander("📋 一键复制 (点击框内全选)", expanded=True):
+                # height=300 让框变大，方便你全选
+                st.text_area("复制专用框", value=last_ai_msg, height=300, label_visibility="collapsed")
     # === 插入结束 ===
     st.markdown("---")
     c_input, c_btn = st.columns([5, 1])

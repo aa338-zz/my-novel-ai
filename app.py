@@ -316,5 +316,3 @@ with tabs[5]:
         st.session_state["style_sample"] = d["style"]
         st.session_state.characters = d["chars"]
         st.toast("数据已复活！")
-
-for msg in st.session_state.messages:

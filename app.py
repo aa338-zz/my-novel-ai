@@ -437,9 +437,7 @@ with tab_pipeline:
 
     # Step 3: 大纲
     with st.expander("Step 3: 大纲", expanded=bool(st.session_state["pipe_char"])):
-        if st.button("📜 生成细纲"):
-           # === 修改 Prompt ===
-        if st.button("📜 生成细纲"):
+            if st.button("📜 生成细纲"):
             # 强制 AI 输出标题
             p = (
                 f"核心梗：{st.session_state['pipe_idea']}。人设：{st.session_state['pipe_char']}。\n"

@@ -13,84 +13,47 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# --- 🎨 核心美化 CSS 注入 (这是整容的关键) ---
+# --- 🎨 核心美化 CSS 注入 ---
 st.markdown("""
 <style>
-    /* 1. 全局背景与字体 */
+    /* 全局深色背景 */
     .stApp {
-        background-color: #0e1117; /* 深空灰背景 */
+        background-color: #0e1117;
     }
-    h1, h2, h3 {
-        font-family: 'Helvetica Neue', sans-serif;
-        color: #ffffff;
-        font-weight: 700;
+    h1, h2, h3, p {
+        color: #e6edf3 !important;
     }
     
-    /* 2. 侧边栏美化 */
+    /* 侧边栏美化 */
     section[data-testid="stSidebar"] {
-        background-color: #161b22; /* 稍微亮一点的深色 */
+        background-color: #161b22;
         border-right: 1px solid #30363d;
     }
     
-    /* 3. 按钮变成“霓虹风格” */
+    /* 按钮霓虹特效 */
     .stButton>button {
         background: linear-gradient(45deg, #2b5876, #4e4376);
-        color: white;
+        color: white !important;
         border: none;
         border-radius: 8px;
-        padding: 0.5rem 1rem;
         transition: all 0.3s ease;
-        font-weight: bold;
         box-shadow: 0 4px 15px rgba(0,0,0,0.2);
     }
     .stButton>button:hover {
         transform: translateY(-2px);
         box-shadow: 0 6px 20px rgba(78, 67, 118, 0.6);
-        background: linear-gradient(45deg, #4e4376, #2b5876);
     }
 
-    /* 4. 输入框“毛玻璃”效果 */
+    /* 输入框毛玻璃 */
     .stTextInput>div>div>input, .stTextArea>div>div>textarea {
         background-color: #0d1117;
         color: #e6edf3;
         border: 1px solid #30363d;
-        border-radius: 8px;
-    }
-    .stTextInput>div>div>input:focus, .stTextArea>div>div>textarea:focus {
-        border-color: #58a6ff;
-        box-shadow: 0 0 10px rgba(88, 166, 255, 0.3);
-    }
-
-    /* 5. 聊天气泡美化 */
-    .stChatMessage {
-        background-color: #161b22;
-        border-radius: 15px;
-        padding: 10px;
-        border: 1px solid #30363d;
-        margin-bottom: 10px;
-    }
-    
-    /* 6. Tabs 标签页美化 */
-    .stTabs [data-baseweb="tab-list"] {
-        gap: 10px;
-    }
-    .stTabs [data-baseweb="tab"] {
-        height: 50px;
-        background-color: #161b22;
-        border-radius: 5px;
-        color: #8b949e;
-        border: 1px solid #30363d;
-    }
-    .stTabs [aria-selected="true"] {
-        background-color: #238636 !important; /* 选中变绿 */
-        color: white !important;
-        font-weight: bold;
     }
 
     /* 隐藏右上角菜单 */
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
-    
 </style>
 """, unsafe_allow_html=True)
 
@@ -107,25 +70,21 @@ if "style_sample" not in st.session_state:
     st.session_state["style_sample"] = ""
 
 # ==========================================
-# 1. 登录系统 (UI 美化版)
+# 1. 登录系统
 # ==========================================
 USERS = {"vip": "666", "admin": "admin"} 
 
 def check_login():
     if not st.session_state["logged_in"]:
-        # 使用空的 container 居中布局
         col1, col2, col3 = st.columns([1, 2, 1])
         with col2:
             st.markdown("<br><br><br>", unsafe_allow_html=True)
             st.markdown("<h1 style='text-align: center; color: #58a6ff;'>⚡ GENESIS · 创世笔</h1>", unsafe_allow_html=True)
-            st.markdown("<p style='text-align: center; color: #8b949e;'>ULTIMATE WRITING ENGINE</p>", unsafe_allow_html=True)
             
             with st.form("login_form"):
                 st.markdown("### 身份验证")
-                pwd = st.text_input("ACCESS KEY", type="password", placeholder="请输入密钥...")
-                submit = st.form_submit_button("🚀 启动引擎 / LAUNCH")
-                
-                if submit:
+                pwd = st.text_input("ACCESS KEY", type="password", placeholder="请输入密钥(666)...")
+                if st.form_submit_button("🚀 启动引擎 / LAUNCH"):
                     if pwd in USERS.values():
                         st.session_state["logged_in"] = True
                         st.rerun()
@@ -159,14 +118,13 @@ with st.sidebar:
             st.session_state.current_chapter = selected_chap
             st.rerun()
     with col_c2:
-        st.markdown("<br>", unsafe_allow_html=True) # 稍微对齐一下
+        st.markdown("<br>", unsafe_allow_html=True) 
         if st.button("➕"):
             new = len(st.session_state.chapters)+1
             st.session_state.chapters[new] = []
             st.session_state.current_chapter = new
             st.rerun()
 
-    st.markdown("<br>", unsafe_allow_html=True)
     st.markdown("### ⚙️ 参数设定")
     novel_type = st.selectbox("类型 / GENRE", ["玄幻爽文", "都市异能", "克苏鲁悬疑", "赛博朋克", "历史权谋"])
     temp = st.slider("疯魔指数 / TEMP", 0.1, 1.5, 1.2)
@@ -176,15 +134,7 @@ client = OpenAI(api_key=api_key, base_url="https://api.deepseek.com")
 # ==========================================
 # 3. 主界面 (Tabs)
 # ==========================================
-# 使用 emoji 增加视觉效果
-tabs = st.tabs([
-    "✍️ 写作", 
-    "👁️ 感官", 
-    "📊 节奏", 
-    "🧬 风格", 
-    "👨‍🏫 审稿", 
-    "💾 数据"
-])
+tabs = st.tabs(["✍️ 写作", "👁️ 感官", "📊 节奏", "🧬 风格", "👨‍🏫 审稿", "💾 数据"])
 
 # --- TAB 1: 沉浸写作 ---
 with tabs[0]:
@@ -201,7 +151,7 @@ with tabs[0]:
     【铁律】拒绝废话，拒绝AI味，直接写故事，要有爽点！
     """
 
-    container = st.container(height=550) # 固定高度，让它像个聊天软件
+    container = st.container(height=500)
     current_msgs = st.session_state.chapters[st.session_state.current_chapter]
     
     with container:
@@ -211,7 +161,6 @@ with tabs[0]:
             av = "🧑‍💻" if msg["role"] == "user" else "⚡"
             st.chat_message(msg["role"], avatar=av).write(msg["content"])
 
-    # 输入框
     if prompt := st.chat_input("在此输入剧情指令..."):
         st.session_state.chapters[st.session_state.current_chapter].append({"role":"user", "content":prompt})
         with container:
@@ -241,7 +190,7 @@ with tabs[1]:
         with st.spinner("🚀 核弹发射中..."):
             s_prompt = f"""
             用户输入："{raw_text}"
-            扩写为5个维度的描写（不要解释，直接写句子）：
+            扩写为5个维度的描写：
             1.【视觉】 2.【听觉】 3.【嗅觉/味觉】 4.【触觉】 5.【环境烘托】
             文风：{novel_type}
             """
@@ -253,7 +202,6 @@ with tabs[1]:
 with tabs[2]:
     st.markdown("#### 📊 节奏与大纲")
     col_p1, col_p2 = st.columns(2)
-    
     with col_p1:
         st.info("📜 **黄金三章生成**")
         book_name = st.text_input("书名/脑洞")
@@ -261,7 +209,6 @@ with tabs[2]:
             p_prompt = f"书名：{book_name}\n类型：{novel_type}\n生成网文黄金三章细纲，期待感拉满。"
             res = client.chat.completions.create(model="deepseek-chat", messages=[{"role":"user","content":p_prompt}])
             st.markdown(res.choices[0].message.content)
-            
     with col_p2:
         st.info("🧱 **卡文急救**")
         if st.button("推演后续 3 种走向", use_container_width=True):
@@ -276,7 +223,7 @@ with tabs[3]:
     user_sample = st.text_area("在此粘贴样本 (AI 将学习此文风):", value=st.session_state["style_sample"], height=200)
     if st.button("💉 注入文风 DNA", use_container_width=True):
         st.session_state["style_sample"] = user_sample
-        st.toast("✅ 风格已融合！AI 现在的笔触跟你一样了。")
+        st.toast("✅ 风格已融合！")
 
 # --- TAB 5: 毒舌主编 ---
 with tabs[4]:
@@ -293,7 +240,6 @@ with tabs[4]:
 # --- TAB 6: 数据中心 ---
 with tabs[5]:
     st.markdown("#### 💾 资产管理")
-    
     with st.expander("🦸‍♂️ RPG 角色卡生成", expanded=True):
         c_name = st.text_input("角色名")
         if st.button("✨ 生成属性面板"):

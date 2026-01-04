@@ -435,9 +435,9 @@ with tab_pipeline:
     if st.session_state["pipe_char"]:
         st.session_state["pipe_char"] = st.text_area("✅ 人设结果", st.session_state["pipe_char"], height=200)
 
-    # Step 3: 大纲
+# Step 3: 大纲
     with st.expander("Step 3: 大纲", expanded=bool(st.session_state["pipe_char"])):
-    if st.button("📜 生成细纲"):
+        if st.button("📜 生成细纲"):
             # 强制 AI 输出标题
             p = (
                 f"核心梗：{st.session_state['pipe_idea']}。人设：{st.session_state['pipe_char']}。\n"
@@ -447,12 +447,8 @@ with tab_pipeline:
                 "1. ...\n"
                 "2. ..."
             )
-            # 下面的代码不用动...
             stream = client.chat.completions.create(model="deepseek-chat", messages=[{"role":"system","content":planner_prompt}, {"role":"user","content":p}], stream=True)
             st.session_state["pipe_outline"] = st.write_stream(stream)
-            
-    if st.session_state["pipe_outline"]:
-        st.session_state["pipe_outline"] = st.text_area("✅ 大纲结果", st.session_state["pipe_outline"], height=300)
 
 # --- TAB 3: 外挂 (升级版) ---
 with tab_tools:

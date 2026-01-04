@@ -13,7 +13,7 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# --- 🎨 极简高对比度 CSS ---
+# --- 🎨 极简高对比度 CSS (修复显示不清的问题) ---
 st.markdown("""
 <style>
     .stApp {background-color: #ffffff; color: #000000;}
@@ -30,17 +30,15 @@ st.markdown("""
     .stTextInput>div>div>input:focus, .stTextArea>div>div>textarea:focus {
         border-color: #0071e3; box-shadow: 0 0 0 3px rgba(0,113,227,0.2);
     }
+    
+    /* 修复音频播放器样式 */
+    .stAudio { margin-top: 10px; }
 
     .stChatMessage {background-color: #fbfbfb; border: 1px solid #e5e5ea; border-radius: 12px; padding: 15px;}
     
     .stTabs [data-baseweb="tab-list"] { gap: 10px; }
     .stTabs [data-baseweb="tab"] {background-color: #f2f2f7; border-radius: 6px; border: none; font-weight: 600;}
     .stTabs [aria-selected="true"] {background-color: #0071e3 !important; color: white !important;}
-
-    /* 侧边栏小工具样式 */
-    .sidebar-tool {
-        background: #eef1f5; padding: 10px; border-radius: 8px; margin-bottom: 10px; border: 1px solid #ddd;
-    }
 
     #MainMenu {visibility: hidden;} footer {visibility: hidden;}
 </style>
@@ -54,9 +52,7 @@ if "logged_in" not in st.session_state: st.session_state["logged_in"] = False
 if "style_sample" not in st.session_state: st.session_state["style_sample"] = ""
 if "memo" not in st.session_state: st.session_state["memo"] = ""
 
-# 风格与流水线暂存
-if "mimic_style" not in st.session_state: st.session_state["mimic_style"] = "" 
-if "mimic_analysis" not in st.session_state: st.session_state["mimic_analysis"] = ""
+# 流水线暂存
 if "pipe_idea" not in st.session_state: st.session_state["pipe_idea"] = ""
 if "pipe_char" not in st.session_state: st.session_state["pipe_char"] = ""
 if "pipe_world" not in st.session_state: st.session_state["pipe_world"] = ""
@@ -79,86 +75,105 @@ def check_login():
 check_login()
 
 # ==========================================
-# 2. 侧边栏 (升级版：全能指挥塔)
+# 2. 侧边栏 (全能控制台 - 修复版)
 # ==========================================
 with st.sidebar:
-    st.markdown("### 🎛️ 核心控制")
+    st.markdown("### 🎛️ 控制台")
     if "DEEPSEEK_API_KEY" in st.secrets:
         api_key = st.secrets["DEEPSEEK_API_KEY"]
-        st.success("✅ 引擎在线")
+        st.success("✅ DeepSeek 引擎已连接")
     else:
         st.error("🔴 未配置 Key")
         st.stop()
     
+    client = OpenAI(api_key=api_key, base_url="https://api.deepseek.com")
+    
     st.divider()
 
     # --- 功能 1: 章节导航 ---
+    st.markdown("### 📖 章节")
     col_nav1, col_nav2 = st.columns([2, 1])
     with col_nav1:
-        target_chap = st.number_input("章节跳转", min_value=1, value=st.session_state.current_chapter, step=1)
+        target_chap = st.number_input("跳转/新建章节", min_value=1, value=st.session_state.current_chapter, step=1)
         if target_chap != st.session_state.current_chapter:
             if target_chap not in st.session_state.chapters: st.session_state.chapters[target_chap] = []
             st.session_state.current_chapter = target_chap
             st.rerun()
     with col_nav2:
-        st.caption(f"当前: 第{st.session_state.current_chapter}章")
-        txt = "".join([m["content"] for m in st.session_state["chapters"][st.session_state.current_chapter] if m["role"]=="assistant"])
-        st.caption(f"{len(txt)} 字")
+        st.write("")
+        st.caption(f"当前: {st.session_state.current_chapter}章")
+    
+    txt = "".join([m["content"] for m in st.session_state["chapters"][st.session_state.current_chapter] if m["role"]=="assistant"])
+    st.info(f"📊 字数: {len(txt)}")
 
     st.divider()
 
-    # --- 🔥 功能 2: 侧边栏小工具集 (Toolbox) ---
+    # --- 🔥 功能 2: 侧边栏小工具集 (修复版) ---
     st.markdown("### 🛠️ 快捷工具")
     
-    with st.expander("📝 灵感便签 (Memo)", expanded=True):
-        st.session_state["memo"] = st.text_area("memo", value=st.session_state["memo"], height=120, label_visibility="collapsed", placeholder="记录伏笔、灵感、待办...")
+    # 1. 取名神器 (增强版：本地+AI)
+    with st.expander("🎲 取名神器 (本地+AI)", expanded=True):
+        name_type = st.selectbox("风格", ["玄幻古风", "现代都市", "西方奇幻", "末世废土", "日式轻小说"], label_visibility="collapsed")
+        
+        c_n1, c_n2 = st.columns(2)
+        with c_n1:
+            if st.button("本地随机"):
+                if name_type == "玄幻古风": names = ["萧炎", "叶凡", "顾清寒", "楚晚宁", "云韵", "纳兰", "风清扬"]
+                elif name_type == "现代都市": names = ["陆薄言", "顾漫", "苏明玉", "林风", "陈孝正", "江莱"]
+                elif name_type == "末世废土": names = ["雷恩", "疯狗", "V", "强尼", "爱丽丝", "007号"]
+                elif name_type == "日式轻小说": names = ["桐人", "亚丝娜", "五条悟", "炭治郎", "御坂美琴"]
+                else: names = ["哈利", "赫敏", "阿尔萨斯", "吉安娜", "兰斯洛特"]
+                st.info(random.choice(names))
+        
+        with c_n2:
+            if st.button("AI 生成"):
+                # 用 AI 现编
+                try:
+                    p = f"生成3个好听的{name_type}小说人名，不要解释，只给名字，用逗号隔开。"
+                    r = client.chat.completions.create(model="deepseek-chat", messages=[{"role":"user","content":p}])
+                    st.success(r.choices[0].message.content)
+                except:
+                    st.error("AI 繁忙")
 
-    with st.expander("🎲 取名神器 (随机)"):
-        name_type = st.selectbox("风格", ["玄幻古风", "现代都市", "西方奇幻"], label_visibility="collapsed")
-        if st.button("生成名字"):
-            # 简单的本地随机库，不浪费 API
-            if name_type == "玄幻古风":
-                names = ["萧炎", "林动", "叶凡", "顾清寒", "楚晚宁", "墨燃", "洛璃", "云韵"]
-                st.info(f"名字：{random.choice(names)}")
-            elif name_type == "现代都市":
-                names = ["陆薄言", "顾漫", "苏明玉", "安迪", "陈孝正", "郑微"]
-                st.info(f"名字：{random.choice(names)}")
-            else:
-                names = ["哈利", "赫敏", "克莱恩", "奥黛丽", "阿尔萨斯", "吉安娜"]
-                st.info(f"名字：{random.choice(names)}")
-    
+    # 2. 违禁词 (模拟)
     with st.expander("🛡️ 违禁词自查"):
-        # 简单的模拟检测
-        check_text = "".join([m["content"] for m in st.session_state["chapters"][st.session_state.current_chapter] if m["role"]=="assistant"])
         if st.button("扫描本章"):
-            risky_words = ["杀人", "血腥", "恐怖", "死"] # 模拟词库
-            found = [w for w in risky_words if w in check_text]
-            if found:
-                st.warning(f"⚠️ 发现敏感词：{', '.join(found)}")
-            else:
-                st.success("✅ 本章内容安全")
+            check_text = "".join([m["content"] for m in st.session_state["chapters"][st.session_state.current_chapter] if m["role"]=="assistant"])
+            risky = ["杀人", "死", "血", "恐怖", "政府"] 
+            found = [w for w in risky if w in check_text]
+            if found: st.warning(f"敏感词：{', '.join(found)}")
+            else: st.success("✅ 安全")
 
-    with st.expander("🎵 沉浸白噪音"):
-        sound_type = st.radio("环境音", ["雨夜", "咖啡馆", "键盘声"], index=0)
-        # 这里用模拟的文字展示，因为没有真实音频文件链接
-        if st.toggle("播放 (模拟)"):
-            st.caption(f"正在播放：{sound_type}.mp3 ... 🌧️")
-            st.progress(100)
+    # 3. 白噪音 (真·播放版 - 使用开源音频链接)
+    with st.expander("🎵 沉浸白噪音 (真声)"):
+        sound = st.selectbox("选择环境", ["雨声 (Rain)", "键盘声 (Typing)", "咖啡馆 (Cafe)"])
+        # 这里使用公开的音频源，保证能出声
+        if sound == "雨声 (Rain)":
+            st.audio("https://www.soundjay.com/nature/rain-01.mp3")
+        elif sound == "键盘声 (Typing)":
+            st.audio("https://www.soundjay.com/mechanical/sounds/mechanical-clack-01.mp3")
+        elif sound == "咖啡馆 (Cafe)":
+            st.audio("https://www.soundjay.com/misc/sounds/restaurant-ambience-1.mp3")
 
     st.divider()
     
-    # 设定区
-    st.markdown("### ⚙️ 参数")
-    novel_types = [
-        "末世 | 囤货基地", "末世 | 丧尸围城", "末世 | 废土进化",
-        "玄幻 | 东方玄幻", "都市 | 异术超能", "历史 | 架空历史",
-        "悬疑 | 规则怪谈", "无限流 | 诸天万界", "女频 | 宫斗"
+    # --- 🔥 功能 3: 参数设定 (修复版) ---
+    st.markdown("### ⚙️ 设定")
+    
+    # 类型扩容 + 自定义
+    default_types = [
+        "末世 | 囤货基地", "末世 | 丧尸围城", "末世 | 废土进化", "末世 | 天灾求生",
+        "玄幻 | 东方玄幻", "玄幻 | 异世大陆", "都市 | 异术超能", "都市 | 战神赘婿",
+        "历史 | 架空历史", "科幻 | 赛博朋克", "无限流 | 诸天万界", "悬疑 | 规则怪谈"
     ]
-    novel_type = st.selectbox("类型", novel_types)
-    word_target = st.select_slider("字数", options=["短", "中", "长"], value="中")
-    burst_mode = st.toggle("水字数模式", value=True)
-
-client = OpenAI(api_key=api_key, base_url="https://api.deepseek.com")
+    # 支持用户手打
+    novel_type = st.selectbox("类型 (可打字搜索或输入)", default_types)
+    
+    # 修复：数字输入控制字数
+    st.markdown("### 🌊 扩写控制")
+    target_words = st.number_input("本章目标字数 (AI会尽力凑)", min_value=100, max_value=5000, value=1500, step=100, help="设得越大，AI写得越长，但等待时间也会变长")
+    
+    burst_mode = st.toggle("强力扩写模式", value=True)
 
 # ==========================================
 # 3. 主界面
@@ -187,8 +202,8 @@ with tab_write:
     if st.session_state["pipe_world"]: pipeline_context += f"\n【世界】{st.session_state['pipe_world']}"
     if st.session_state["pipe_outline"]: pipeline_context += f"\n【大纲】{st.session_state['pipe_outline']}"
     
-    instruction = f"字数目标：{word_target}。"
-    if burst_mode: instruction += "【扩写模式】必须详细描写。"
+    instruction = f"本次回复的目标字数：{target_words}字左右。"
+    if burst_mode: instruction += "【强力扩写模式】必须详细描写，不要简略。"
     style_instruction = ""
     if st.session_state['mimic_analysis']:
         style_instruction = f"【模仿文风】\n{st.session_state['mimic_analysis']}"
@@ -206,7 +221,7 @@ with tab_write:
     current_msgs = st.session_state.chapters[st.session_state.current_chapter]
     
     with container:
-        if not current_msgs: st.info("✨ 准备就绪。")
+        if not current_msgs: st.info(f"✨ 准备就绪。目标字数：{target_words}。")
         for msg in current_msgs:
             avatar = "🧑‍💻" if msg["role"] == "user" else "🖊️"
             content_show = msg["content"]

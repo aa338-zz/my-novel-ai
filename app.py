@@ -14,7 +14,6 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# 初始化
 if "init_done" not in st.session_state:
     st.session_state["chapters"] = {1: []}
     st.session_state["current_chapter"] = 1
@@ -51,6 +50,8 @@ st.markdown("""
     .stChatMessage {background-color: #f8f9fa; border: 1px solid #dee2e6; border-radius: 10px;}
     
     .sensitive-word {background-color: #ffe6e6; color: #d93025; font-weight: bold; padding: 2px 4px; border-radius: 4px;}
+    .alert-card {background-color: #fff5f5; border-left: 4px solid #fc8181; padding: 10px; margin-bottom: 8px;}
+    .alert-word {color: #e53e3e; font-weight: bold; background-color: #fed7d7; padding: 0 4px; border-radius: 2px;}
 
     #MainMenu {visibility: hidden;} footer {visibility: hidden;}
 </style>
@@ -101,7 +102,6 @@ with st.sidebar:
     with c2:
         st.caption(f"第 {st.session_state.current_chapter} 章")
     
-    # 获取当前章节纯文本 (用于统计和复制)
     current_text_raw = "".join([m["content"] for m in st.session_state["chapters"][st.session_state.current_chapter] if m["role"]=="assistant"])
     st.caption(f"字数: {len(current_text_raw)}")
     st.divider()
@@ -122,22 +122,30 @@ with st.sidebar:
                 st.success(r.choices[0].message.content)
             except: st.error("AI 忙碌")
 
-    with st.expander("🛡️ 违禁词高亮"):
-        if st.button("扫描本章"):
+    with st.expander("🛡️ 违禁词雷达"):
+        if st.button("🔴 开始扫描"):
             risky = ["杀人", "死", "血", "恐怖", "色情", "政府", "爆炸", "尸体"]
-            found = set()
-            hl_text = current_text_raw
-            for w in risky:
-                if w in hl_text:
-                    found.add(w)
-                    hl_text = hl_text.replace(w, f"<span class='sensitive-word'>{w}</span>")
-            if found:
-                st.markdown(f"<div style='background:#f9f9f9; padding:10px; border-radius:8px; height:300px; overflow-y:scroll;'>{hl_text}</div>", unsafe_allow_html=True)
+            found_issues = []
+            if not current_text_raw:
+                st.warning("没内容！")
             else:
-                st.success("✅ 安全")
+                for word in risky:
+                    if word in current_text_raw:
+                        sentences = re.split(r'[。！？\n]', current_text_raw)
+                        for sent in sentences:
+                            if word in sent:
+                                clean_sent = sent.strip()
+                                if clean_sent:
+                                    hl_sent = clean_sent.replace(word, f"<span class='alert-word'>{word}</span>")
+                                    found_issues.append(hl_sent)
+                if found_issues:
+                    st.error(f"发现 {len(found_issues)} 处风险！")
+                    for issue in found_issues[:5]:
+                        st.markdown(f"<div class='alert-card'>📍 ...{issue}...</div>", unsafe_allow_html=True)
+                else:
+                    st.success("✅ 安全")
 
     st.divider()
-    # 参数
     all_types = ["末世 | 囤货基地", "末世 | 丧尸围城", "末世 | 废土进化", "玄幻 | 东方玄幻", "都市 | 异术超能", "都市 | 战神赘婿", "历史 | 架空历史", "科幻 | 赛博朋克", "无限流 | 诸天万界", "悬疑 | 规则怪谈", "女频 | 豪门总裁", "女频 | 宫斗宅斗", "自定义"]
     t_sel = st.selectbox("类型", all_types)
     novel_type = st.text_input("输入类型", "克苏鲁修仙") if t_sel == "自定义" else t_sel
@@ -149,11 +157,10 @@ with st.sidebar:
 # ==========================================
 tab_write, tab_clone, tab_pipeline, tab_review, tab_extra = st.tabs(["✍️ 沉浸写作", "🧬 风格克隆", "🚀 创作流水线", "💾 审稿/导出", "🔮 扩展/周边"])
 
-# --- TAB 1: 沉浸写作 (核心升级区) ---
+# --- TAB 1: 沉浸写作 ---
 with tab_write:
     st.markdown(f"### 📖 第 {st.session_state.current_chapter} 章")
     
-    # 上下文组装
     pipe_ctx = ""
     if st.session_state["pipe_char"]: pipe_ctx += f"\n【角色】{st.session_state["pipe_char"]}"
     if st.session_state["pipe_world"]: pipe_ctx += f"\n【世界】{st.session_state["pipe_world"]}"
@@ -170,7 +177,7 @@ with tab_write:
     禁止说“好的”。
     """
 
-    container = st.container(height=450)
+    container = st.container(height=400) # 留出空间给底部操作
     current_msgs = st.session_state.chapters[st.session_state.current_chapter]
     
     with container:
@@ -181,101 +188,108 @@ with tab_write:
             if len(content) > 500 and "前文" in content: content = content[:200] + "...\n(已折叠)"
             st.chat_message(msg["role"], avatar=avatar).write(content)
 
-    # 输入区
+    # ==========================
+    # 🔥 核心更新：剧情微操区
+    # ==========================
+    st.markdown("---")
     c_in, c_btn = st.columns([6, 1])
+    
     user_input = None
-    with c_in:
-        if prompt := st.chat_input("输入剧情..."): user_input = prompt
-    with c_btn:
+    manual_plot = None # 剧情定向
+    
+    # 1. 正常的对话框 (Chat Input)
+    # Streamlit 的 chat_input 是固定的，这里我们用普通的 text_area 代替，为了布局
+    # 但为了体验好，我们还是用 chat_input 放在最下面
+    
+    # 2. 剧情定向输入框 (Plot Injection)
+    col_plot, col_action = st.columns([5, 1])
+    with col_plot:
+        manual_plot = st.text_input("💡 下一段剧情走向 (留空则 AI 自由发挥)", placeholder="例如：主角在转角处遇到了前女友，场面一度尴尬...")
+    with col_action:
         st.write("") 
         st.write("") 
-        if st.button("🔄 继续写", use_container_width=True): user_input = "接着上文继续写。"
+        btn_continue = st.button("🔄 继续写", use_container_width=True, help="点击后，AI将根据左侧的指示继续生成")
 
+    # 处理输入
+    if prompt := st.chat_input("输入对话/指令..."):
+        user_input = prompt
+
+    # 逻辑判断
+    final_instruction = ""
     if user_input:
-        st.session_state.chapters[st.session_state.current_chapter].append({"role":"user", "content":user_input})
+        final_instruction = user_input
+    elif btn_continue:
+        if manual_plot:
+            final_instruction = f"接着上文写。注意：{manual_plot}。请自然地过渡到这个情节。"
+        else:
+            final_instruction = "接着上文继续写，保持连贯。"
+
+    # 执行生成
+    if final_instruction:
+        st.session_state.chapters[st.session_state.current_chapter].append({"role":"user", "content":final_instruction})
         with container:
-            st.chat_message("user", avatar="🧑‍💻").write(user_input)
+            st.chat_message("user", avatar="🧑‍💻").write(final_instruction)
             with st.chat_message("assistant", avatar="🖊️"):
-                with st.spinner("码字中..."):
-                    stream = client.chat.completions.create(
-                        model="deepseek-chat",
-                        messages=[{"role":"system","content":system_prompt}] + current_msgs,
-                        stream=True, temperature=1.2
-                    )
-                    response = st.write_stream(stream)
+                stream = client.chat.completions.create(
+                    model="deepseek-chat",
+                    messages=[{"role":"system","content":system_prompt}] + current_msgs,
+                    stream=True, temperature=1.2
+                )
+                response = st.write_stream(stream)
         st.session_state.chapters[st.session_state.current_chapter].append({"role":"assistant", "content":response})
 
-    # =========================================================
-    # 🔥🔥🔥 核心升级：底部精修工具栏 (Toolbar) 🔥🔥🔥
-    # =========================================================
-    st.divider()
-    st.markdown("### 🛠️ 章节精修与操作")
+    # ==========================
+    # 🛠️ 底部工具栏
+    # ==========================
+    st.markdown("### 🛠️ 章节操作")
+    action_tab1, action_tab2, action_tab3 = st.tabs(["📋 一键复制全章", "✍️ 整章重写", "✂️ 局部精修"])
     
-    # 使用 Tabs 区分不同操作，避免界面混乱
-    action_tab1, action_tab2, action_tab3 = st.tabs(["📋 一键复制", "✍️ 不满意？整章重写", "✂️ 局部精修 (选中重写)"])
-    
-    # 1. 一键复制
     with action_tab1:
-        st.caption("全选复制下方内容：")
-        # st.code 自带复制按钮，最方便
-        st.code(current_text_raw, language="text")
+        st.caption("👇 鼠标悬停在下方黑色区域，点击右上角【复制图标】即可全选。")
+        # 拼接全章内容
+        full_chapter_text = ""
+        for m in current_msgs:
+            if m["role"] == "assistant":
+                full_chapter_text += m["content"] + "\n\n"
+        st.code(full_chapter_text if full_chapter_text else "暂无内容", language="text")
 
-    # 2. 整章重写
     with action_tab2:
-        st.info("对现在的剧情走向不满意？提出意见，AI 推翻重写。")
-        rewrite_instruction = st.text_input("你想怎么改？", placeholder="例如：把这一章的氛围改得更恐怖一点，主角要受伤。")
-        if st.button("💥 按要求重写本章"):
+        rewrite_instruction = st.text_input("重写意见", placeholder="例如：氛围再恐怖一点。")
+        if st.button("💥 重写本章"):
             if not current_text_raw:
-                st.warning("还没写内容呢！")
+                st.warning("没内容。")
             else:
-                with st.spinner("正在推翻重写..."):
-                    p = f"""
-                    【指令】用户对当前章节不满意，请根据以下意见重写整章。
-                    意见：{rewrite_instruction}
-                    
-                    注意：保持上下文逻辑，但根据意见大幅修改。
-                    """
-                    # 为了不丢失历史，我们把这次重写作为一次新的生成的
-                    r = client.chat.completions.create(
-                        model="deepseek-chat",
-                        messages=[{"role":"system","content":system_prompt}] + current_msgs + [{"role":"user", "content":p}]
-                    )
-                    new_content = r.choices[0].message.content
-                    
-                    # 更新 Session，追加一条“重写版”
-                    st.session_state.chapters[st.session_state.current_chapter].append({"role":"user", "content": f"重写指令：{rewrite_instruction}"})
-                    st.session_state.chapters[st.session_state.current_chapter].append({"role":"assistant", "content": new_content})
-                    st.rerun()
+                p = f"【指令】重写本章：{rewrite_instruction}。"
+                st.session_state.chapters[st.session_state.current_chapter].append({"role":"user", "content": p})
+                with container:
+                    st.chat_message("user", avatar="🧑‍💻").write(p)
+                    with st.chat_message("assistant", avatar="🖊️"):
+                        stream = client.chat.completions.create(
+                            model="deepseek-chat",
+                            messages=[{"role":"system","content":system_prompt}] + current_msgs,
+                            stream=True, temperature=1.2
+                        )
+                        response = st.write_stream(stream)
+                st.session_state.chapters[st.session_state.current_chapter].append({"role":"assistant", "content":response})
+                st.rerun()
 
-    # 3. 局部精修 (选中重写)
     with action_tab3:
-        st.info("复制你不满意的那一段话，告诉 AI 怎么润色。")
         c_edit1, c_edit2 = st.columns(2)
         with c_edit1:
-            bad_part = st.text_area("粘贴不满意的片段", height=100, placeholder="粘贴你觉得写得烂的那几句...")
+            bad_part = st.text_area("粘贴片段", height=100)
         with c_edit2:
-            edit_instruction = st.text_area("你想怎么改？", height=100, placeholder="例如：这段打斗太水了，写出拳拳到肉的感觉。")
-        
-        if st.button("✨ 润色片段"):
+            edit_instruction = st.text_area("怎么改？", height=100)
+        if st.button("✨ 润色"):
             if bad_part and edit_instruction:
-                with st.spinner("正在做手术..."):
-                    p = f"""
-                    请修改以下小说片段。
-                    原片段：{bad_part}
-                    修改要求：{edit_instruction}
-                    
-                    请只输出修改后的片段，不要输出其他废话。
-                    """
-                    r = client.chat.completions.create(model="deepseek-chat", messages=[{"role":"user","content":p}])
-                    refined_text = r.choices[0].message.content
-                    
-                    st.success("润色完成！")
-                    st.markdown("**修改后：**")
-                    st.code(refined_text, language="text")
-            else:
-                st.warning("请填好内容")
+                p = f"修改片段：{bad_part}\n要求：{edit_instruction}\n只输出修改后的内容。"
+                stream = client.chat.completions.create(model="deepseek-chat", messages=[{"role":"user","content":p}], stream=True)
+                st.write_stream(stream)
 
-# --- TAB 2: 风格克隆 ---
+# --- TAB 2-5 保持原样 (逻辑加固版) ---
+# (为了节省篇幅，这里复用之前的稳定逻辑，主要是写作区的UI交互变动)
+# ... [TAB 2, 3, 4, 5 代码与上一版相同，直接复制即可] ...
+# 为了保证完整性，我把剩下的 TAB 代码也贴上：
+
 with tab_clone:
     st.info("上传样本，提取文风。")
     up, res = st.columns(2)
@@ -290,64 +304,56 @@ with tab_clone:
                 st.session_state["mimic_analysis"] = r.choices[0].message.content
                 st.rerun()
     with res:
-        if st.session_state["mimic_analysis"]:
-            st.text_area("特征", st.session_state["mimic_analysis"], height=300)
+        if st.session_state["mimic_analysis"]: st.text_area("特征", st.session_state["mimic_analysis"], height=300)
 
-# --- TAB 3: 流水线 ---
 with tab_pipeline:
-    st.info("Step by Step。已优化速度。")
+    st.info("Step by Step。流式生成。")
     with st.expander("Step 1: 脑洞", expanded=not st.session_state["pipe_idea"]):
         c1, c2 = st.columns([3, 1])
         idea = c1.text_input("点子：")
         if c2.button("生成梗"):
-            with st.spinner("极速生成..."):
-                p = f"基于点子“{idea}”，为{novel_type}生成核心梗。要求：简练、有爽点。100字。"
-                r = client.chat.completions.create(model="deepseek-chat", messages=[{"role":"user","content":p}])
-                st.session_state["pipe_idea"] = r.choices[0].message.content
-                st.rerun()
-    if st.session_state["pipe_idea"]: st.session_state["pipe_idea"] = st.text_area("✅ 脑洞", st.session_state["pipe_idea"])
+            p = f"基于点子“{idea}”，为{novel_type}生成核心梗。100字。"
+            stream = client.chat.completions.create(model="deepseek-chat", messages=[{"role":"user","content":p}], stream=True)
+            st.session_state["pipe_idea"] = st.write_stream(stream)
+            st.rerun()
+    if st.session_state["pipe_idea"]: st.session_state["pipe_idea"] = st.text_area("✅ 脑洞", st.session_state["pipe_idea"], height=100)
 
     with st.expander("Step 2: 人设", expanded=bool(st.session_state["pipe_idea"])):
         if st.button("生成人设"):
-            with st.spinner("极速生成..."):
-                p = f"基于梗“{st.session_state['pipe_idea']}”，生成主角反派。200字。"
-                r = client.chat.completions.create(model="deepseek-chat", messages=[{"role":"user","content":p}])
-                st.session_state["pipe_char"] = r.choices[0].message.content
-                st.rerun()
-    if st.session_state["pipe_char"]: st.session_state["pipe_char"] = st.text_area("✅ 人设", st.session_state["pipe_char"])
+            p = f"基于梗“{st.session_state['pipe_idea']}”，生成主角反派。200字。"
+            stream = client.chat.completions.create(model="deepseek-chat", messages=[{"role":"user","content":p}], stream=True)
+            st.session_state["pipe_char"] = st.write_stream(stream)
+            st.rerun()
+    if st.session_state["pipe_char"]: st.session_state["pipe_char"] = st.text_area("✅ 人设", st.session_state["pipe_char"], height=200)
 
     with st.expander("Step 3: 世界", expanded=bool(st.session_state["pipe_char"])):
         if st.button("生成世界"):
-            with st.spinner("极速生成..."):
-                p = f"基于{novel_type}，生成简要世界观。150字。"
-                r = client.chat.completions.create(model="deepseek-chat", messages=[{"role":"user","content":p}])
-                st.session_state["pipe_world"] = r.choices[0].message.content
-                st.rerun()
-    if st.session_state["pipe_world"]: st.session_state["pipe_world"] = st.text_area("✅ 世界", st.session_state["pipe_world"])
+            p = f"基于{novel_type}，生成简要世界观。150字。"
+            stream = client.chat.completions.create(model="deepseek-chat", messages=[{"role":"user","content":p}], stream=True)
+            st.session_state["pipe_world"] = st.write_stream(stream)
+            st.rerun()
+    if st.session_state["pipe_world"]: st.session_state["pipe_world"] = st.text_area("✅ 世界", st.session_state["pipe_world"], height=150)
 
     with st.expander("Step 4: 大纲", expanded=bool(st.session_state["pipe_world"])):
         if st.button("生成细纲"):
-            with st.spinner("推演大纲..."):
-                p = f"梗：{st.session_state['pipe_idea']}。人设：{st.session_state['pipe_char']}。世界：{st.session_state['pipe_world']}。生成前三章细纲。"
-                r = client.chat.completions.create(model="deepseek-chat", messages=[{"role":"user","content":p}])
-                st.session_state["pipe_outline"] = r.choices[0].message.content
-                st.rerun()
-    if st.session_state["pipe_outline"]: st.session_state["pipe_outline"] = st.text_area("✅ 大纲", st.session_state["pipe_outline"])
+            p = f"""核心梗：{st.session_state['pipe_idea']}。人设：{st.session_state['pipe_char']}。世界：{st.session_state['pipe_world']}。生成前三章细纲。严禁输出废话。"""
+            st.markdown("**推演中...**")
+            stream = client.chat.completions.create(model="deepseek-chat", messages=[{"role":"user","content":p}], stream=True)
+            st.session_state["pipe_outline"] = st.write_stream(stream)
+            st.rerun()
+    if st.session_state["pipe_outline"]: st.session_state["pipe_outline"] = st.text_area("✅ 大纲", st.session_state["pipe_outline"], height=300)
 
-# --- TAB 4: 审稿 ---
 with tab_review:
     if st.button("🔍 毒舌审稿"):
         txt = "\n".join([m["content"] for m in current_msgs if m["role"]=="assistant"])
         if len(txt)<50: st.warning("字数太少")
         else:
-            with st.spinner("审稿中..."):
-                p = f"毒舌点评：\n{txt}"
-                r = client.chat.completions.create(model="deepseek-chat", messages=[{"role":"user","content":p}])
-                st.info(r.choices[0].message.content)
+            p = f"毒舌点评：\n{txt}"
+            stream = client.chat.completions.create(model="deepseek-chat", messages=[{"role":"user","content":p}], stream=True)
+            st.write_stream(stream)
     data = {"history": st.session_state.chapters, "chars": st.session_state.characters}
     st.download_button("📥 导出全书", json.dumps(data, ensure_ascii=False), "novel.json")
 
-# --- TAB 5: 周边 ---
 with tab_extra:
     st.markdown("### 🔮 扩展")
     c1, c2 = st.columns(2)
@@ -355,20 +361,18 @@ with tab_extra:
         st.info("🎨 绘图提示词")
         d = st.text_area("画面描述", height=100)
         if st.button("✨ 生成咒语"):
-            with st.spinner("翻译中..."):
-                p = f"翻译为MJ/SD提示词(Prompt)：{d}"
-                r = client.chat.completions.create(model="deepseek-chat", messages=[{"role":"user","content":p}])
-                st.code(r.choices[0].message.content)
+            p = f"翻译为MJ/SD提示词(Prompt)：{d}"
+            stream = client.chat.completions.create(model="deepseek-chat", messages=[{"role":"user","content":p}], stream=True)
+            st.write_stream(stream)
     with c2:
         st.info("👾 虚拟书评")
         if st.button("💬 生成评论"):
             txt = "".join([m["content"] for m in current_msgs if m["role"]=="assistant"])
             if len(txt)<100: st.warning("字数太少")
             else:
-                with st.spinner("生成中..."):
-                    p = f"扮演5个读者评论：{txt[:1000]}"
-                    r = client.chat.completions.create(model="deepseek-chat", messages=[{"role":"user","content":p}])
-                    st.markdown(r.choices[0].message.content)
+                p = f"扮演5个读者评论：{txt[:1000]}"
+                stream = client.chat.completions.create(model="deepseek-chat", messages=[{"role":"user","content":p}], stream=True)
+                st.write_stream(stream)
     
     with st.expander("🧹 一键排版"):
         raw = st.text_area("粘贴乱文本", height=150)

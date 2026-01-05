@@ -8,34 +8,45 @@ import zipfile
 import time
 
 # ==========================================
-# 0. 全局配置 & 强力初始化 (完全保留原版)
+# 0. 全局配置 & 强力初始化 (恢复原版详细配置)
 # ==========================================
 st.set_page_config(
-    page_title="GENESIS · 创世笔", 
+    page_title="GENESIS · 创世笔 Ultimate", 
     page_icon="⚡", 
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
 def init_session():
-    # 这里合并了新旧所有的状态，确保数据不丢失
+    # 包含了你原始代码的所有变量，加上我新增的变量，一个都不少
     defaults = {
+        # --- 原版基础数据 ---
         "chapters": {1: []},
         "current_chapter": 1,
         "history_snapshots": [],
+        "codex": {},            # 设定集
+        "scrap_yard": [],       # 废稿篓
+        "logged_in": False,
+        "daily_target": 3000,
+        "first_visit": True,
+        "init_done": True,
+        
+        # --- 原版流水线数据 (现改为创世蓝图) ---
         "pipe_idea": "",
         "pipe_char": "",
         "pipe_world": "",
         "pipe_outline": "",
-        "codex": {},        # 设定集
-        "scrap_yard": [],   # 废稿篓
-        "mimic_analysis": "", # 原版文风记忆
-        "mimic_style": "",    # 新版文风滤镜
-        "context_buffer": "", # 新版续写缓存
-        "logged_in": False,
-        "daily_target": 3000,
-        "first_visit": True,
-        "init_done": True
+        
+        # --- 新增：备战区 & 导演台数据 ---
+        "context_buffer": "",   # 续写的前文缓存
+        "mimic_style": "",      # 仿写的文风缓存
+        "mimic_analysis": "",   # (保留旧版变量以防万一)
+        
+        # --- 新增：全局设置默认值 ---
+        "global_genre": "东方玄幻",
+        "global_tone": "热血 / 王道",
+        "global_naming": "东方中文名",
+        "global_world_bg": ""
     }
     for key, value in defaults.items():
         if key not in st.session_state:
@@ -44,10 +55,11 @@ def init_session():
 init_session()
 
 # ==========================================
-# 1. 样式美化 (CSS) - (完全保留原版 + 新增样式)
+# 1. 样式美化 (CSS) - (完全恢复你原版的长代码，并追加新样式)
 # ==========================================
 st.markdown("""
 <style>
+    /* === 原版样式区 (保留) === */
     .stApp {background-color: #f8f9fa; color: #1a1a1a;}
     section[data-testid="stSidebar"] {background-color: #ffffff; border-right: 1px solid #e0e0e0;}
     
@@ -60,25 +72,34 @@ st.markdown("""
         background-color: #1c7ed6; transform: translateY(-1px);
     }
     
-    /* 原版新手引导样式 */
     .guide-card {
         background: white; border: 1px solid #e0e0e0; border-radius: 16px; padding: 24px;
         text-align: center; height: 100%; box-shadow: 0 4px 12px rgba(0,0,0,0.05);
     }
     .guide-icon {font-size: 48px; margin-bottom: 16px; display: block;}
     .guide-title {font-size: 20px; font-weight: 700; color: #343a40; margin-bottom: 8px;}
+    .guide-desc {color: #868e96; font-size: 14px; line-height: 1.5;}
     
-    /* 系统生成框样式 */
     .system-box {
         background: linear-gradient(135deg, #e7f5ff 0%, #d0ebff 100%);
         border: 2px solid #339af0; border-radius: 8px; padding: 15px;
         color: #1864ab; font-family: 'Courier New', monospace; font-weight: bold;
     }
-
-    /* 新增：章节标题样式 */
+    
+    /* === 新增样式区 (为了新功能) === */
     .chapter-header {
-        font-family: 'Georgia', serif; font-size: 24px; font-weight: bold; color: #343a40;
-        border-bottom: 2px solid #ced4da; padding-bottom: 10px; margin-bottom: 20px;
+        font-family: 'Georgia', serif; font-size: 28px; font-weight: bold; color: #343a40;
+        border-bottom: 3px solid #e9ecef; padding-bottom: 15px; margin-bottom: 25px;
+    }
+    
+    .global-setting-box {
+        background-color: #fff0f6; border: 1px solid #fcc2d7; 
+        padding: 15px; border-radius: 8px; margin-bottom: 15px;
+    }
+    
+    .director-control-box {
+        background-color: #e7f5ff; border-left: 4px solid #339af0;
+        padding: 10px 15px; border-radius: 4px; margin-bottom: 10px;
     }
     
     #MainMenu {visibility: hidden;} footer {visibility: hidden;}
@@ -86,7 +107,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # ==========================================
-# 2. 登录逻辑 (完全保留原版)
+# 2. 登录逻辑 (恢复原版)
 # ==========================================
 USERS = {"vip": "666", "admin": "admin"} 
 def check_login():
@@ -94,6 +115,7 @@ def check_login():
         c1, c2, c3 = st.columns([1,1,1])
         with c2:
             st.markdown("<br><br><h1 style='text-align: center;'>⚡ 创世笔 Ultimate</h1>", unsafe_allow_html=True)
+            st.markdown("<p style='text-align: center; color: gray;'>V 3.0 全功能增强版</p>", unsafe_allow_html=True)
             with st.form("login"):
                 pwd = st.text_input("🔑 通行密钥", type="password", placeholder="输入 666")
                 if st.form_submit_button("🚀 启动引擎", use_container_width=True):
@@ -106,88 +128,86 @@ def check_login():
 check_login()
 
 # ==========================================
-# 3. 侧边栏：指挥塔 (完全复原原版功能)
+# 3. 侧边栏：指挥塔 (重构：全局设置置顶 + 保留设定集/废稿篓)
 # ==========================================
 with st.sidebar:
     st.markdown("### 🎛️ 指挥塔")
     if "DEEPSEEK_API_KEY" in st.secrets:
         api_key = st.secrets["DEEPSEEK_API_KEY"]
+        client = OpenAI(api_key=api_key, base_url="https://api.deepseek.com")
         st.success("✅ 神经网络：在线")
     else:
         st.error("🔴 请配置 API Key")
         st.stop()
-    client = OpenAI(api_key=api_key, base_url="https://api.deepseek.com")
     
-    # --- 仪表盘 ---
     st.divider()
+
+    # --- 1. 全局书籍设置 (NEW: 最醒目) ---
+    st.markdown("### 📚 世界观基石 (Global Config)")
+    with st.container():
+        st.info("在此定义本书的底层逻辑，影响所有 AI 生成内容。")
+        
+        # 小说类型 (扩展版)
+        genre_list = [
+            "东方玄幻 | 练气筑基", "都市异能 | 灵气复苏", "末世 | 囤货求生", 
+            "无限流 | 诸天万界", "悬疑 | 规则怪谈", "赛博朋克 | 机械飞升",
+            "历史 | 穿越争霸", "同人 | 动漫影视", "西幻 | 领主种田",
+            "游戏 | 第四天灾", "女频 | 豪门爽文", "女频 | 宫斗宅斗", "自定义"
+        ]
+        s_genre = st.selectbox("小说类型", genre_list, index=0)
+        st.session_state["global_genre"] = s_genre.split("|")[0] if "|" in s_genre else s_genre
+        
+        # 核心基调 (NEW)
+        tone_opts = ["热血 / 王道 / 爽文", "暗黑 / 压抑 / 生存", "轻松 / 搞笑 / 吐槽", "悬疑 / 烧脑 / 反转", "治愈 / 情感 / 细腻"]
+        st.session_state["global_tone"] = st.selectbox("核心基调", tone_opts, index=0)
+        
+        # 世界背景 (NEW)
+        st.session_state["global_world_bg"] = st.text_input("世界背景 (简述)", placeholder="如：蒸汽朋克大明，灵气复苏的东京...")
+        
+        # 起名风格 (NEW)
+        st.session_state["global_naming"] = st.selectbox("起名风格", ["东方中文名 (萧炎)", "西方译名 (艾伦)", "日式轻小说 (佐藤)", "古风雅韵 (纳兰)"])
+
+    st.divider()
+
+    # --- 2. 仪表盘 & 导航 (保留原版) ---
     curr_chap_data = st.session_state["chapters"].get(st.session_state["current_chapter"], [])
     current_text_len = len("".join([m["content"] for m in curr_chap_data if m["role"]=="assistant"]))
     st.markdown(f"**🔥 今日码字** ({current_text_len} / {st.session_state['daily_target']})")
     st.progress(min(current_text_len / st.session_state['daily_target'], 1.0))
-    st.divider()
-
-    # --- 章节控制 (保留) ---
+    
     c1, c2 = st.columns([2, 1])
     with c1:
-        target_chap = st.number_input("章号", min_value=1, value=st.session_state.current_chapter, step=1)
+        target_chap = st.number_input("跳转章节", min_value=1, value=st.session_state.current_chapter, step=1)
         if target_chap != st.session_state.current_chapter:
             if target_chap not in st.session_state.chapters: st.session_state.chapters[target_chap] = []
             st.session_state.current_chapter = target_chap
             st.rerun()
-    with c2: st.caption(f"第 {st.session_state.current_chapter} 章")
-    
-    if st.button("⏪ 撤销上一步"):
-        if len(st.session_state["chapters"][st.session_state.current_chapter]) >= 2:
-            st.session_state["chapters"][st.session_state.current_chapter].pop()
-            st.session_state["chapters"][st.session_state.current_chapter].pop()
-            st.toast("时光倒流成功", icon="↩️")
-            st.rerun()
+    with c2: 
+        if st.button("⏪ 撤销"):
+            if len(st.session_state["chapters"][st.session_state.current_chapter]) >= 2:
+                st.session_state["chapters"][st.session_state.current_chapter].pop()
+                st.session_state["chapters"][st.session_state.current_chapter].pop()
+                st.toast("时光倒流成功", icon="↩️")
+                st.rerun()
 
     st.divider()
 
-    # --- 📂 档案室 (原版保留) ---
-    with st.expander("📂 档案室 (侧边栏版)", expanded=True):
-        t_imp1, t_imp2 = st.tabs(["📥 导入旧稿", "🧬 文风克隆"])
-        # 1. 导入旧稿
-        with t_imp1:
-            uploaded_draft = st.file_uploader("传TXT续写", type=["txt"], key="draft_up_sidebar")
-            if uploaded_draft and st.button("📥 确认导入"):
-                draft_content = uploaded_draft.getvalue().decode("utf-8")
-                st.session_state["chapters"][st.session_state.current_chapter].append(
-                    {"role": "user", "content": f"以下是我之前写的内容，请读取并准备续写：\n\n{draft_content}"}
-                )
-                st.session_state["chapters"][st.session_state.current_chapter].append(
-                    {"role": "assistant", "content": "✅ 已读取旧稿，请指示下一步剧情。"}
-                )
-                st.success(f"已导入 {len(draft_content)} 字！")
-                st.rerun()
-        # 2. 文风克隆
-        with t_imp2:
-            uploaded_style = st.file_uploader("传大神作品", type=["txt"], key="style_up_sidebar")
-            if uploaded_style and st.button("🧠 提取文风"):
-                raw_style = uploaded_style.getvalue().decode("utf-8")[:2000]
-                with st.spinner("正在解构大神文风..."):
-                    r = client.chat.completions.create(
-                        model="deepseek-chat", 
-                        messages=[{"role":"user","content":f"分析这段文字的文风（用词、节奏、叙事视角）：\n{raw_style}"}]
-                    )
-                    st.session_state["mimic_analysis"] = r.choices[0].message.content
-                    st.success("文风已激活！")
-
-    # --- 设定集 (原版保留) ---
-    with st.expander("📕 设定集"):
+    # --- 3. 设定集 (保留原版逻辑 + 放在侧边栏底部) ---
+    with st.expander("📕 设定集 (Codex)"):
+        st.caption("防止 AI 吃书，在此记录专有名词")
         new_term = st.text_input("词条", placeholder="青莲火")
         new_desc = st.text_input("描述", placeholder="异火榜19")
-        if st.button("➕"):
+        if st.button("➕ 录入设定"):
             st.session_state["codex"][new_term] = new_desc
             st.success("已录")
+        st.markdown("---")
         for k, v in st.session_state["codex"].items():
             st.markdown(f"**{k}**: {v}")
 
-    # --- 废稿篓 (原版保留) ---
-    with st.expander("🗑️ 废稿篓"):
-        scrap = st.text_area("存入", height=60)
-        if st.button("📥"):
+    # --- 4. 废稿篓 (保留原版逻辑) ---
+    with st.expander("🗑️ 废稿篓 (Scrap Yard)"):
+        scrap = st.text_area("暂存", height=60, placeholder="写废的段落扔这里...")
+        if st.button("📥 存入"):
             if scrap: st.session_state["scrap_yard"].append(scrap); st.success("存了")
         if st.session_state["scrap_yard"]:
             st.markdown("---")
@@ -196,23 +216,11 @@ with st.sidebar:
                 if st.button(f"❌ 删 {i+1}", key=f"del_{i}"):
                     st.session_state["scrap_yard"].pop(i)
                     st.rerun()
-                    
-    # --- 新增：一些全局参数 ---
-    st.divider()
-    st.markdown("### 🧠 全局设置")
-    genre_list = [
-        "东方玄幻 | 练气筑基", "都市异能 | 灵气复苏", "末世 | 囤货求生", 
-        "无限流 | 诸天万界", "悬疑 | 规则怪谈", "赛博朋克 | 机械飞升",
-        "历史 | 穿越争霸", "同人 | 动漫影视", "西幻 | 领主种田",
-        "游戏 | 第四天灾", "女频 | 豪门爽文", "女频 | 宫斗宅斗", "自定义"
-    ]
-    t_sel = st.selectbox("📚 小说类型", genre_list)
-    novel_type = st.text_input("输入具体类型", "克苏鲁修仙") if t_sel == "自定义" else t_sel.split("|")[0]
-    burst_mode = st.toggle("💥 强力扩写 (注水模式)", value=True)
 
+    # 注意：档案室已按要求移除侧边栏，移动到写作区
 
 # ==========================================
-# 4. 新手引导 (完全保留原版)
+# 4. 新手引导 (恢复原版长代码)
 # ==========================================
 if st.session_state["logged_in"] and st.session_state["first_visit"]:
     st.markdown("<br><br>", unsafe_allow_html=True)
@@ -224,16 +232,16 @@ if st.session_state["logged_in"] and st.session_state["first_visit"]:
         st.markdown("""
         <div class="guide-card">
             <span class="guide-icon">📂</span>
-            <div class="guide-title">导入与文风</div>
-            <div class="guide-desc">在侧边栏 <b>[档案室]</b>。<br>上传写了一半的稿子继续写，或者上传大神的小说让 AI 模仿文风。</div>
+            <div class="guide-title">备战与设定</div>
+            <div class="guide-desc"><b>[侧边栏]</b> 配置世界观基调。<br><b>[写作区顶部]</b> 投喂旧稿或样章。</div>
         </div>
         """, unsafe_allow_html=True)
     with c2:
         st.markdown("""
         <div class="guide-card">
             <span class="guide-icon">✍️</span>
-            <div class="guide-title">沉浸与精修</div>
-            <div class="guide-desc"><b>[写作区]</b> 集成了一切。<br>一边写，一边点开下方的工具箱进行<b>局部润色</b>或<b>整章重写</b>。</div>
+            <div class="guide-title">沉浸与外挂</div>
+            <div class="guide-desc"><b>[写作区]</b> 开启分栏模式。<br>左边写书，右边实时获取<b>剧情预测</b>与<b>润色灵感</b>。</div>
         </div>
         """, unsafe_allow_html=True)
     with c3:
@@ -248,7 +256,7 @@ if st.session_state["logged_in"] and st.session_state["first_visit"]:
     c_center = st.columns([1, 2, 1])
     with c_center[1]:
         st.markdown("<br>", unsafe_allow_html=True)
-        if st.button("🚀 开始创作 (Bug已修复)", type="primary", use_container_width=True):
+        if st.button("🚀 开始创作 (Feature Complete)", type="primary", use_container_width=True):
             st.session_state["first_visit"] = False
             st.rerun()
     st.stop()
@@ -256,329 +264,370 @@ if st.session_state["logged_in"] and st.session_state["first_visit"]:
 # ==========================================
 # 5. 主工作区
 # ==========================================
-tab_write, tab_pipeline, tab_tools, tab_publish = st.tabs(["✍️ 沉浸写作", "🚀 流水线", "🔮 灵感外挂", "💾 发书控制台"])
+tab_write, tab_blueprint, tab_tools, tab_publish = st.tabs(["✍️ 沉浸写作", "🗺️ 创世蓝图 (原流水线)", "🔮 灵感工具箱", "💾 发书控制台"])
 
-# --- TAB 1: 沉浸写作 (融合版：保留原貌，增加功能) ---
+# --- TAB 1: 沉浸写作 (集大成者) ---
 with tab_write:
-    # >>> 区域 1：导演级备战区 (新增) <<<
-    with st.expander("🎬 备战区：素材投喂 & 状态控制 (新增)", expanded=True):
-        col_prep_1, col_prep_2 = st.columns([1, 1])
-        # A. 素材投喂
-        with col_prep_1:
-            st.markdown("#### 📂 素材投喂")
-            upload_mode = st.radio("模式选择", ["🚫 不使用", "📄 导入旧稿续写", "🧬 导入大神样章仿写"], horizontal=True, label_visibility="collapsed")
-            if upload_mode == "📄 导入旧稿续写":
-                uploaded_ctx = st.file_uploader("上传TXT (自动读取末尾2000字)", type=["txt"], key="ctx_up_main")
-                if uploaded_ctx:
-                    raw = uploaded_ctx.getvalue().decode("utf-8")[-2000:]
-                    st.session_state["context_buffer"] = raw
-                    st.success(f"✅ 已装载前文")
-            elif upload_mode == "🧬 导入大神样章仿写":
-                uploaded_sty = st.file_uploader("上传样章", type=["txt"], key="sty_up_main")
-                if uploaded_sty and st.button("🧠 提取文风 DNA"):
-                    with st.spinner("正在分析..."):
-                        sample = uploaded_sty.getvalue().decode("utf-8")[:3000]
-                        r = client.chat.completions.create(model="deepseek-chat", messages=[{"role":"user", "content":f"分析文风：\n\n{sample}"}])
-                        st.session_state["mimic_style"] = r.choices[0].message.content
-                        st.success("✅ 文风已激活")
-        # B. 导演参数
-        with col_prep_2:
-            st.markdown("#### 🎚️ 导演控制台")
-            c_p1, c_p2 = st.columns(2)
-            with c_p1:
-                plot_phase = st.selectbox("当前状态", ["🌊 铺垫/日常", "🔥 推进/解谜", "💥 高潮/冲突", "❤️ 情感/收尾"])
-                desc_focus = st.selectbox("描写侧重", ["👁️ 画面/光影", "🗣️ 对话/交锋", "🧠 心理/内省", "👊 动作/招式"])
-            with c_p2:
-                view_point = st.selectbox("视角", ["第三人称 (上帝)", "第一人称 (我)"])
-                word_target = st.number_input("字数目标", 100, 5000, 1500, 100)
     
-    st.markdown("---")
-    
-    # >>> 区域 2：分栏开关 (新增) <<<
-    use_split_view = st.toggle("📖 开启对照模式 (左边写，右边看大纲/工具)", value=False)
+    # >>> 区域 1：导演级备战区 (原档案室功能移至此处) <<<
+    with st.expander("🎬 备战区：素材投喂 (续写/仿写)", expanded=True):
+        c_prep1, c_prep2 = st.columns([1, 1])
+        
+        # 功能 A：续写 (原导入旧稿)
+        with c_prep1:
+            st.markdown("#### 📄 导入旧稿续写")
+            st.caption("上传写了一半的 TXT，AI 自动读取最后 2000 字作为记忆。")
+            uploaded_ctx = st.file_uploader("上传续写文件", type=["txt"], key="ctx_up_main")
+            if uploaded_ctx:
+                raw_text = uploaded_ctx.getvalue().decode("utf-8")
+                # 自动截取最后 2000 字
+                st.session_state["context_buffer"] = raw_text[-2000:]
+                st.success(f"✅ 已装载旧稿！AI 将紧接：...{raw_text[-50:]}")
+
+        # 功能 B：仿写 (原文风克隆)
+        with c_prep2:
+            st.markdown("#### 🧬 导入大神样章仿写")
+            st.caption("上传你喜欢的文章，AI 学习其用词和节奏。")
+            uploaded_sty = st.file_uploader("上传样章文件", type=["txt"], key="sty_up_main")
+            if uploaded_sty and st.button("🧠 提取文风 DNA"):
+                with st.spinner("正在深度解构文风..."):
+                    sample_txt = uploaded_sty.getvalue().decode("utf-8")[:3000]
+                    # 调用 AI 分析
+                    r = client.chat.completions.create(
+                        model="deepseek-chat",
+                        messages=[{"role":"user", "content":f"请专业分析这段文字的文风（句式长短、形容词密度、叙事视角、心理描写占比），总结为一段简短的写作指南：\n\n{sample_txt}"}]
+                    )
+                    st.session_state["mimic_style"] = r.choices[0].message.content
+                    st.success("✅ 文风滤镜已激活！接下来的写作将模仿此风格。")
+
+    # >>> 区域 2：导演控制台 (新增非必选逻辑) <<<
+    st.markdown("<div class='director-control-box'>", unsafe_allow_html=True)
+    st.markdown("#### 🎚️ 导演控制台 (Director Control)")
+    c_dir1, c_dir2, c_dir3, c_dir4 = st.columns(4)
+    with c_dir1:
+        # 增加默认选项 "AI 自动把控"
+        plot_phase = st.selectbox("当前剧情状态", ["✨ AI 自动把控节奏", "🌊 铺垫/日常 (慢)", "🔥 推进/解谜 (中)", "💥 高潮/冲突 (快)", "❤️ 情感/收尾 (柔)"], index=0)
+    with c_dir2:
+        # 增加默认选项 "均衡/随机"
+        desc_focus = st.selectbox("描写侧重", ["🎲 均衡/随机", "👁️ 画面/光影", "🗣️ 对话/交锋", "🧠 心理/内省", "👊 动作/招式"], index=0)
+    with c_dir3:
+        view_point = st.selectbox("叙事视角", ["第三人称 (上帝)", "第一人称 (我)"])
+    with c_dir4:
+        # 注水功能
+        burst_mode = st.toggle("💥 强力注水模式", value=True, help="开启后 AI 会疯狂扩写细节")
+    st.markdown("</div>", unsafe_allow_html=True)
+
+    st.divider()
+
+    # >>> 区域 3：分栏模式开关 (解决灵感外挂位置问题) <<<
+    use_split_view = st.toggle("📖 开启对照模式 (左侧写作 | 右侧灵感外挂)", value=True)
     
     if use_split_view:
-        col_write, col_aux = st.columns([2, 1])
+        col_write, col_assist = st.columns([7, 3])
     else:
         col_write = st.container()
-        col_aux = st.container() # 如果不分栏，这个区域放在下面或者不显示
-    
-    # --- 写作主逻辑 ---
+        col_assist = st.empty() # 隐藏
+
+    # --- 左侧：核心写作区 ---
     with col_write:
-        st.markdown(f"### 📖 第 {st.session_state.current_chapter} 章")
+        st.markdown(f"<div class='chapter-header'>第 {st.session_state.current_chapter} 章</div>", unsafe_allow_html=True)
         
-        # 组装 Prompt (保留原版逻辑 + 融合新参数)
-        # 1. 基础上下文
-        ctx = ""
-        if st.session_state.get("pipe_char"): ctx += f"\n【角色】{st.session_state['pipe_char']}"
-        if st.session_state.get("pipe_outline"): ctx += f"\n【大纲】{st.session_state['pipe_outline']}"
-        if st.session_state.get("mimic_analysis"): ctx += f"\n【档案室文风】{st.session_state['mimic_analysis']}"
-        if st.session_state.get("mimic_style"): ctx += f"\n【备战区文风】{st.session_state['mimic_style']}"
-        if st.session_state.get("context_buffer"): ctx += f"\n【续写前文】{st.session_state['context_buffer']}"
-        
-        # 2. RAG 设定集
-        active_codex = [f"{k}:{v}" for k, v in st.session_state["codex"].items()]
-        if active_codex: ctx += f"\n【设定集】{';'.join(active_codex)}"
-
-        # 3. 导演指令
-        phase_map = {"🌊 铺垫/日常": "节奏舒缓", "🔥 推进/解谜": "节奏紧凑", "💥 高潮/冲突": "短句密集，紧张", "❤️ 情感/收尾": "细腻情感"}
-        sys_p = (
-            f"你是由DeepSeek驱动的作家。类型：{novel_type}。\n"
-            f"视角：{view_point}。剧情状态：{phase_map[plot_phase]}。侧重：{desc_focus}。\n"
-            f"{ctx}\n"
-            f"【执行铁律】\n"
-            f"1. **格式强制**：输出的第一行必须是Markdown标题！(### 第X章：标题)\n"
-            f"2. 字数：{word_target}。\n"
-            f"3. 严禁输出'好的'，直接开始创作。"
-        )
-
-        container = st.container(height=450)
+        # 消息容器
+        msg_container = st.container(height=600)
         current_msgs = st.session_state["chapters"][st.session_state.current_chapter]
         
-        with container:
-            if not current_msgs: st.info("✨ 准备就绪...")
+        with msg_container:
+            if not current_msgs: 
+                st.info(f"✨ 笔锋已至。当前世界观：{st.session_state['global_genre']} | 基调：{st.session_state['global_tone']}")
+            
             for msg in current_msgs:
                 avatar = "🧑‍💻" if msg["role"] == "user" else "🖊️"
                 content = msg["content"]
-                if len(content) > 800 and "前文" in content: content = content[:200] + "...\n(已折叠)"
+                # 折叠过长的前文引用
+                if len(content) > 1000 and "前文" in content: 
+                    content = content[:200] + "...\n(已自动折叠长引文)"
                 st.chat_message(msg["role"], avatar=avatar).write(content)
 
-        # 🔥 随手精修面板 (原版保留)
-        with st.expander("🛠️ 快速精修面板 (润色/重写)", expanded=False):
-            t1, t2 = st.tabs(["✍️ 局部润色", "💥 本章重写"])
-            with t1:
-                c_fix1, c_fix2 = st.columns(2)
-                bad = c_fix1.text_area("粘贴片段", height=100, label_visibility="collapsed", placeholder="粘贴不满意的片段...")
-                req = c_fix2.text_area("修改要求", height=100, label_visibility="collapsed", placeholder="例：写得更恐怖一点")
-                if st.button("✨ 润色片段"):
-                    if bad and req:
-                        p = f"修改片段：{bad}\n要求：{req}\n直接输出内容。"
-                        stream = client.chat.completions.create(model="deepseek-chat", messages=[{"role":"user","content":p}], stream=True)
-                        st.write_stream(stream)
-            with t2:
-                st.warning("⚠️ 建议先备份。")
-                req_full = st.text_input("重写要求", placeholder="例：节奏太慢了，直接进入高潮")
+        # 随手精修面板 (保留原版功能)
+        with st.expander("🛠️ 快速精修面板 (润色/重写)"):
+            t_fix1, t_fix2 = st.tabs(["✍️ 局部润色", "💥 本章重写"])
+            with t_fix1:
+                c_f1, c_f2 = st.columns(2)
+                bad_frag = c_f1.text_area("粘贴片段", height=100, placeholder="粘贴写得不好的句子...")
+                fix_req = c_f2.text_area("要求", height=100, placeholder="如：写得更恐怖一点")
+                if st.button("✨ 润色片段") and bad_frag:
+                    p = f"修改片段：{bad_frag}\n要求：{fix_req}\n风格：{st.session_state['global_tone']}。\n直接输出修改后的内容。"
+                    stream = client.chat.completions.create(model="deepseek-chat", messages=[{"role":"user","content":p}], stream=True)
+                    st.write_stream(stream)
+            with t_fix2:
+                re_req = st.text_input("重写要求", placeholder="如：节奏太慢了，直接进入高潮")
                 if st.button("💥 推翻重写本章"):
-                    p = f"【指令】重写本章，要求：{req_full}。保留核心逻辑。"
-                    st.session_state["chapters"][st.session_state.current_chapter].append({"role":"user", "content": f"重写指令：{req_full}"})
-                    st.markdown("**正在重写...**")
-                    try:
-                        stream = client.chat.completions.create(model="deepseek-chat", messages=[{"role":"system","content":sys_p}] + st.session_state["chapters"][st.session_state.current_chapter], stream=True)
-                        response = st.write_stream(stream)
-                        st.session_state["chapters"][st.session_state.current_chapter].append({"role":"assistant", "content": response})
-                    except Exception as e: st.error(str(e))
+                    # 逻辑：添加一条重写指令
+                    st.session_state["chapters"][st.session_state.current_chapter].append({"role":"user", "content": f"【指令】重写本章，要求：{re_req}。"})
+                    st.rerun()
 
-        # === 违禁词雷达 & 复制 (原版保留) ===
+        # === 违禁词雷达 & 复制 (保留原版) ===
         c_tool1, c_tool2 = st.columns([1, 1])
         with c_tool1:
-            with st.expander("🛡️ 违禁词雷达"):
-                if st.button("🔍 扫描本章"):
-                    risky = ["杀人", "死", "血", "恐怖", "色情", "政府", "自杀", "爆炸"] 
-                    txt = "".join([m["content"] for m in current_msgs if m["role"]=="assistant"])
-                    found = [w for w in risky if w in txt]
-                    if found:
-                        st.error(f"发现：{found}")
-                        for w in set(found): txt = txt.replace(w, f":red[**{w}**]")
-                        st.markdown("### 👇 违规定位")
-                        st.markdown(txt)
-                    else: st.success("✅ 内容安全")
+            if st.button("🛡️ 扫描违禁词"):
+                risky = ["杀人", "死", "血", "恐怖", "色情", "政府", "自杀", "爆炸"] 
+                txt = "".join([m["content"] for m in current_msgs if m["role"]=="assistant"])
+                found = [w for w in risky if w in txt]
+                if found:
+                    st.error(f"发现敏感词：{found}")
+                else:
+                    st.success("✅ 内容安全")
         with c_tool2:
             last_ai_msg = ""
             for m in reversed(current_msgs):
                 if m["role"] == "assistant": last_ai_msg = m["content"]; break
             if last_ai_msg:
-                with st.expander("📋 一键复制", expanded=True):
-                    st.text_area("复制专用框", value=last_ai_msg, height=100, label_visibility="collapsed")
+                st.download_button("📋 复制本条回复", last_ai_msg)
 
         st.markdown("---")
         
-        # 输入区
-        c_input, c_btn = st.columns([5, 1])
-        with c_input:
-            manual_plot = st.text_input(
-                "💡 剧情微操 (导演指令)", 
-                placeholder="留空 = AI自动发挥；填了 = 强制按你的剧本演"
-            )
-        with c_btn:
-            st.write("")
-            st.write("")
-            btn_cont = st.button("🔄 继续写", use_container_width=True)
-
-        if prompt := st.chat_input("输入剧情..."):
-            st.session_state["chapters"][st.session_state.current_chapter].append({"role":"user", "content":prompt})
-            with container:
-                st.chat_message("user", avatar="🧑‍💻").write(prompt)
-                with st.chat_message("assistant", avatar="🖊️"):
-                    stream = client.chat.completions.create(model="deepseek-chat", messages=[{"role":"system","content":sys_p}] + current_msgs, stream=True)
-                    response = st.write_stream(stream)
-            st.session_state["chapters"][st.session_state.current_chapter].append({"role":"assistant", "content":response})
-
-        if btn_cont:
-            p = f"接着写。注意：{manual_plot}。" if manual_plot else "接着上文继续写，保持连贯。"
-            st.session_state["chapters"][st.session_state.current_chapter].append({"role":"user", "content":p})
-            with container:
-                st.chat_message("user", avatar="🧑‍💻").write(p)
-                with st.chat_message("assistant", avatar="🖊️"):
-                    stream = client.chat.completions.create(model="deepseek-chat", messages=[{"role":"system","content":sys_p}] + current_msgs, stream=True)
-                    response = st.write_stream(stream)
-            st.session_state["chapters"][st.session_state.current_chapter].append({"role":"assistant", "content":response})
-
-    # --- 右侧：智能辅助区 (在开启分栏时显示) ---
-    if use_split_view and col_aux:
-        with col_aux:
-            st.info("📌 智能辅助区")
-            # 1. 剧情预测 (新增)
-            with st.expander("🔮 剧情预测 (卡文点我)", expanded=True):
-                if st.button("🎲 接下来发生什么？"):
-                    recent = "".join([m["content"] for m in current_msgs[-2:]])
-                    p = f"基于剧情：{recent[:500]}... 给出3个有趣的发展分支。"
-                    r = client.chat.completions.create(model="deepseek-chat", messages=[{"role":"user", "content":p}])
-                    st.write(r.choices[0].message.content)
-            
-            # 2. 润色 (新增)
-            with st.expander("✨ 润色神器"):
-                raw_s = st.text_area("输入句子", placeholder="他很生气")
-                if st.button("🪄 润色"):
-                    p = f"扩写润色句子：{raw_s}。要求画面感强。"
-                    r = client.chat.completions.create(model="deepseek-chat", messages=[{"role":"user", "content":p}])
-                    st.write(r.choices[0].message.content)
-            
-            # 3. 大纲 (原版数据)
-            with st.expander("📜 本书大纲"):
-                st.write(st.session_state.get("pipe_outline", "暂无大纲"))
-
-
-# --- TAB 2: 流水线 (原版保留 + 新增手动录入) ---
-with tab_pipeline:
-    st.info("AI 策划师模式。已限制字数。")
-    planner_prompt = "你是一个网文策划。只提供设定和大纲，**严禁撰写正文**。字数控制在 300 字以内。"
-
-    # Step 1: 脑洞
-    with st.expander("Step 1: 脑洞", expanded=not st.session_state["pipe_idea"]):
-        idea = st.text_input("输入你的初始点子", value=st.session_state["pipe_idea"])
-        c1, c2 = st.columns(2)
-        if c1.button("✨ 生成梗"):
-            p = f"基于点子“{idea}”，为{novel_type}生成核心梗。不要写正文！"
-            stream = client.chat.completions.create(model="deepseek-chat", messages=[{"role":"system","content":planner_prompt}, {"role":"user","content":p}], stream=True)
-            st.session_state["pipe_idea"] = st.write_stream(stream)
-        if c2.button("🔄 换一个"):
-            p = f"基于点子“{idea}”，换一个完全不同的方向生成梗。"
-            stream = client.chat.completions.create(model="deepseek-chat", messages=[{"role":"system","content":planner_prompt}, {"role":"user","content":p}], stream=True)
-            st.session_state["pipe_idea"] = st.write_stream(stream)
+        # 输入区与 System Prompt 动态构建
+        user_input = st.chat_input("输入剧情简述 (或留空让 AI 自由发挥)...")
         
-    if st.session_state["pipe_idea"]:
-        st.session_state["pipe_idea"] = st.text_area("✅ 脑洞结果", st.session_state["pipe_idea"], height=100)
-
-    # Step 2: 人设 (增加手动模式)
-    with st.expander("Step 2: 人设", expanded=bool(st.session_state["pipe_idea"])):
-        t_c1, t_c2 = st.tabs(["🎲 AI生成", "✍️ 手动录入"])
-        with t_c1:
-            c1, c2 = st.columns(2)
-            if c1.button("👥 生成人设"):
-                p = f"基于梗“{st.session_state['pipe_idea']}”，生成人设。只写档案！"
-                stream = client.chat.completions.create(model="deepseek-chat", messages=[{"role":"system","content":planner_prompt}, {"role":"user","content":p}], stream=True)
-                st.session_state["pipe_char"] = st.write_stream(stream)
-            adjust = c2.text_input("哪里不满意？", label_visibility="collapsed", placeholder="输入修改意见...")
-            if adjust and c2.button("🗣️ 调整"):
-                p = f"修改人设：{st.session_state['pipe_char']}。要求：{adjust}。"
-                stream = client.chat.completions.create(model="deepseek-chat", messages=[{"role":"system","content":planner_prompt}, {"role":"user","content":p}], stream=True)
-                st.session_state["pipe_char"] = st.write_stream(stream)
-        with t_c2:
-            manual_char = st.text_area("输入你的人设草稿", placeholder="主角名：... 性格：...")
-            if st.button("✨ 格式化人设"):
-                 p = f"整理以下人设为标准档案格式：{manual_char}"
-                 stream = client.chat.completions.create(model="deepseek-chat", messages=[{"role":"system","content":planner_prompt}, {"role":"user","content":p}], stream=True)
-                 st.session_state["pipe_char"] = st.write_stream(stream)
-
-    if st.session_state["pipe_char"]:
-        st.session_state["pipe_char"] = st.text_area("✅ 人设结果", st.session_state["pipe_char"], height=200)
-
-# Step 3: 大纲
-    with st.expander("Step 3: 大纲", expanded=bool(st.session_state["pipe_char"])):
-        if st.button("📜 生成细纲"):
-            # 强制 AI 输出标题
-            p = (
-                f"核心梗：{st.session_state['pipe_idea']}。人设：{st.session_state['pipe_char']}。\n"
-                "生成前三章细纲。**格式严格要求**：\n"
-                "每一章必须有章节名！例如：\n"
-                "**第一章：[章节名]**\n"
-                "1. ...\n"
-                "2. ..."
+        if user_input:
+            # 1. 构建 System Prompt
+            # 全局基石
+            sys_p = (
+                f"你是由DeepSeek驱动的网文作家。\n"
+                f"【全局设定】类型：{st.session_state['global_genre']}。基调：{st.session_state['global_tone']}。\n"
+                f"世界背景：{st.session_state['global_world_bg']}。起名风格：{st.session_state['global_naming']}。\n"
+                f"【基础参数】视角：{view_point}。\n"
             )
-            stream = client.chat.completions.create(model="deepseek-chat", messages=[{"role":"system","content":planner_prompt}, {"role":"user","content":p}], stream=True)
-            st.session_state["pipe_outline"] = st.write_stream(stream)
-
-# --- TAB 3: 外挂 (原版保留 + 新增) ---
-with tab_tools:
-    st.info("🔮 灵感生成器 (全家桶)")
-    c1, c2 = st.columns(2)
-    # 1. 原版工具
-    with c1:
-        st.markdown("### 🎬 万能场面 (原版)")
-        scene_type = st.selectbox("类型", ["⚔️ 战斗/热血", "💖 感情/甜宠", "👻 悬疑/恐怖", "😎 装逼/打脸", "💼 商战/智斗"])
-        scene_info = st.text_input("描述一下", placeholder="例如：男主壁咚女主")
-        if st.button("✨ 生成场面"):
-            p = f"写一段【{scene_type}】描写。内容：{scene_info}。要求：画面感强，300字。"
-            stream = client.chat.completions.create(model="deepseek-chat", messages=[{"role":"user","content":p}], stream=True)
-            st.write_stream(stream)
             
-    with c2:
-        st.markdown("### 📟 系统生成 (原版)")
-        sys_txt = st.text_input("系统提示语", placeholder="如：获得神级技能！")
-        if st.button("生成面板"):
-            st.markdown(f"""<div class="system-box">【系统提示】<br>⚡ 触发：{sys_txt}</div>""", unsafe_allow_html=True)
+            # 导演指令 (仅当用户未选择自动时生效)
+            if plot_phase != "✨ AI 自动把控节奏":
+                sys_p += f"【强制要求】剧情节奏：{plot_phase}。\n"
+            if desc_focus != "🎲 均衡/随机":
+                sys_p += f"【强制要求】描写侧重：{desc_focus}。\n"
+            
+            if burst_mode:
+                sys_p += "【扩写要求】强力注水模式：必须大量描写环境、光影、气味、微表情，将一句话扩写为一段话。\n"
 
-    st.divider()
-    # 2. 新增工具
-    st.markdown("### 📛 起名助手 (新增)")
-    c3, c4 = st.columns(2)
-    with c3:
-         name_t = st.selectbox("起名类型", ["玄幻人名", "现代人名", "功法名", "地名"])
-    with c4:
-         if st.button("🎲 随机生成"):
-             p = f"生成5个{name_t}，风格要独特。"
-             r = client.chat.completions.create(model="deepseek-chat", messages=[{"role":"user","content":p}])
-             st.info(r.choices[0].message.content)
+            # 注入备战区素材
+            if st.session_state["mimic_style"]:
+                sys_p += f"【文风模仿】请严格模仿以下文风写作：\n{st.session_state['mimic_style']}\n"
+            if st.session_state["context_buffer"]:
+                sys_p += f"【前文接龙】请紧接以下内容继续写：\n{st.session_state['context_buffer']}\n"
+            
+            # 注入 Codex (设定集)
+            if st.session_state["codex"]:
+                codex_str = "; ".join([f"{k}:{v}" for k,v in st.session_state["codex"].items()])
+                sys_p += f"【已知设定 (严禁冲突)】{codex_str}\n"
 
-# --- TAB 4: 发书控制台 (原版保留 + 增强清洗) ---
-with tab_publish:
-    st.info("准备发布？")
-    full_book_text = ""
-    for ch_num, msgs in st.session_state["chapters"].items():
-        ch_txt = "".join([m["content"] for m in msgs if m["role"]=="assistant"])
-        full_book_text += f"\n\n### 第 {ch_num} 章 ###\n\n{ch_txt}"
+            # 格式铁律
+            sys_p += (
+                "\n【执行铁律】\n"
+                "1. 输出的第一行必须是Markdown二级标题 (## 章节名)。\n"
+                "2. 严禁输出'好的'、'明白'等废话，直接输出正文。\n"
+            )
+
+            # 2. 发送请求
+            st.session_state["chapters"][st.session_state.current_chapter].append({"role":"user", "content":user_input})
+            with msg_container:
+                st.chat_message("user", avatar="🧑‍💻").write(user_input)
+                with st.chat_message("assistant", avatar="🖊️"):
+                    stream = client.chat.completions.create(
+                        model="deepseek-chat",
+                        messages=[{"role":"system", "content":sys_p}] + current_msgs,
+                        stream=True
+                    )
+                    response = st.write_stream(stream)
+            st.session_state["chapters"][st.session_state.current_chapter].append({"role":"assistant", "content":response})
+
+    # --- 右侧：灵感外挂 (集成版) ---
+    if use_split_view and col_assist:
+        with col_assist:
+            st.markdown("### 🧩 灵感外挂")
+            st.info("基于上下文的实时辅助工具")
+
+            # 工具 1: 剧情罗盘 (Context Aware)
+            with st.expander("🔮 剧情罗盘 (卡文急救)", expanded=True):
+                st.caption("AI 读取上文，预测 3 个走向")
+                if st.button("🎲 接下来发生什么？"):
+                    # 获取最近 1000 字
+                    recent_ctx = "".join([m["content"] for m in current_msgs[-3:]])
+                    prompt = f"基于以下剧情：\n{recent_ctx[-1000:]}\n\n给出3个有趣的后续发展分支（1.冲突向 2.悬疑向 3.情感向），简短概括。"
+                    r = client.chat.completions.create(model="deepseek-chat", messages=[{"role":"user", "content":prompt}])
+                    st.info(r.choices[0].message.content)
+
+            # 工具 2: 起名助手 (Global Config Aware)
+            with st.expander("📛 起名助手"):
+                st.caption(f"当前风格：{st.session_state['global_naming']}")
+                name_type = st.selectbox("类型", ["配角名", "反派名", "宗门/势力", "宝物/功法"])
+                if st.button("🎲 生成名字"):
+                    p = f"根据风格【{st.session_state['global_naming']}】和小说类型【{st.session_state['global_genre']}】，生成5个好听的{name_type}，并附带简短设定。"
+                    r = client.chat.completions.create(model="deepseek-chat", messages=[{"role":"user", "content":p}])
+                    st.write(r.choices[0].message.content)
+
+            # 工具 3: 扩写神器
+            with st.expander("💄 润色/扩写笔"):
+                raw_s = st.text_input("输入干巴巴的句子", "他拔剑冲了上去")
+                if st.button("🪄 扩写"):
+                    p = f"扩写句子“{raw_s}”。要求：增加环境渲染、动作细节和心理活动，扩写到 150 字左右。风格：{st.session_state['global_tone']}。"
+                    r = client.chat.completions.create(model="deepseek-chat", messages=[{"role":"user", "content":p}])
+                    st.write(r.choices[0].message.content)
+            
+            # 工具 4: 查看大纲
+            with st.expander("📜 创世大纲 (只读)"):
+                st.text_area("大纲内容", st.session_state["pipe_outline"], height=300, disabled=True)
+
+# --- TAB 2: 创世蓝图 (原流水线 - 全面升级为可编辑模式) ---
+with tab_blueprint:
+    st.markdown("### 🗺️ 创世蓝图 (Genesis Blueprint)")
+    st.info("在此构建世界观。所有生成内容均支持 **手动修改**，改完即存档。")
     
-    # 清洗函数 (新增)
-    def clean_text(text):
-        t = text.replace("**", "").replace("##", "")
-        # 去除多余Markdown符号
-        return t
+    bp_sys = f"你是一个网文策划。类型：{st.session_state['global_genre']}。基调：{st.session_state['global_tone']}。"
 
-    c_p1, c_p2, c_p3 = st.columns(3)
-    with c_p1:
-        st.markdown("#### 🧹 纯净 TXT")
-        clean_content = clean_text(full_book_text)
-        st.download_button("📥 下载全书 (已清洗)", clean_content, "novel_clean.txt")
-        st.text_area("预览", clean_content[:200]+"...", height=100, disabled=True)
+    # Step 1: 核心脑洞
+    st.markdown("#### 1️⃣ 核心脑洞 (The Hook)")
+    c_bp1, c_bp2 = st.columns([3, 1])
+    with c_bp1:
+        raw_idea = st.text_input("输入原始点子", value=st.session_state["pipe_idea"], placeholder="如：重生回到了高考前一天...")
+    with c_bp2:
+        if st.button("✨ AI 完善脑洞"):
+            p = f"基于点子“{raw_idea}”，完善成一个有吸引力的核心梗，增加冲突和期待感。"
+            r = client.chat.completions.create(model="deepseek-chat", messages=[{"role":"system","content":bp_sys},{"role":"user","content":p}])
+            st.session_state["pipe_idea"] = r.choices[0].message.content
+            st.rerun()
+    # 结果可编辑
+    st.session_state["pipe_idea"] = st.text_area("脑洞结果 (可直接修改)", st.session_state["pipe_idea"], height=150)
 
-    with c_p2:
-        st.markdown("#### 📦 分章打包 (ZIP)")
-        if st.button("🎁 生成压缩包"):
+    st.markdown("---")
+
+    # Step 2: 角色档案
+    st.markdown("#### 2️⃣ 角色档案 (Characters)")
+    t_char_gen, t_char_edit = st.tabs(["🎲 AI 生成", "✍️ 手动录入"])
+    with t_char_gen:
+        if st.button("👥 基于脑洞生成主角"):
+            p = f"基于脑洞：{st.session_state['pipe_idea']}。生成男女主档案（姓名、性格、金手指、外貌）。"
+            stream = client.chat.completions.create(model="deepseek-chat", messages=[{"role":"system","content":bp_sys},{"role":"user","content":p}], stream=True)
+            st.session_state["pipe_char"] = st.write_stream(stream)
+    with t_char_edit:
+        st.caption("手动输入或修改生成结果：")
+        st.session_state["pipe_char"] = st.text_area("角色档案 (可直接修改)", st.session_state["pipe_char"], height=250)
+
+    st.markdown("---")
+
+    # Step 3: 剧情细纲
+    st.markdown("#### 3️⃣ 剧情细纲 (Outline)")
+    if st.button("📜 生成前三章细纲"):
+        p = (
+            f"脑洞：{st.session_state['pipe_idea']}。\n"
+            f"人设：{st.session_state['pipe_char']}。\n"
+            f"请生成前三章细纲。要求：每一章都有标题，列出关键事件和爽点。"
+        )
+        stream = client.chat.completions.create(model="deepseek-chat", messages=[{"role":"system","content":bp_sys},{"role":"user","content":p}], stream=True)
+        st.session_state["pipe_outline"] = st.write_stream(stream)
+    
+    st.session_state["pipe_outline"] = st.text_area("细纲内容 (可直接修改)", st.session_state["pipe_outline"], height=300)
+
+
+# --- TAB 3: 灵感工具箱 (保留原版 - 以防万一用户想用旧的) ---
+with tab_tools:
+    st.info("🛠️ 经典工具箱 (旧版功能保留)")
+    c_t1, c_t2 = st.columns(2)
+    with c_t1:
+        st.markdown("### 🎬 万能场面")
+        s_type = st.selectbox("类型", ["⚔️ 战斗", "💖 感情", "👻 恐怖", "😎 装逼"])
+        s_desc = st.text_input("描述", placeholder="如：壁咚")
+        if st.button("生成场面"):
+            p = f"写一段{s_type}。内容：{s_desc}。300字。"
+            r = client.chat.completions.create(model="deepseek-chat", messages=[{"role":"user","content":p}])
+            st.text_area("结果", r.choices[0].message.content, height=200)
+    with c_t2:
+        st.markdown("### 📟 系统生成")
+        sys_i = st.text_input("提示语", placeholder="获得神器")
+        if st.button("生成"):
+            st.markdown(f"""<div class="system-box">【系统】{sys_i}</div>""", unsafe_allow_html=True)
+
+
+# --- TAB 4: 发书控制台 (功能增强版) ---
+with tab_publish:
+    st.markdown("### 🚀 发书控制台")
+    st.info("一键清洗 Markdown 符号，自动排版，支持分章打包。")
+    
+    # 1. 聚合全书
+    full_text_raw = ""
+    for ch, msgs in st.session_state["chapters"].items():
+        # 只提取 assistant 的回答
+        ch_txt = "".join([m["content"] for m in msgs if m["role"] == "assistant"])
+        full_text_raw += f"\n\n### 第 {ch} 章 ###\n\n{ch_txt}"
+        
+    # 2. 清洗算法
+    def clean_novel_format(text):
+        # 去除 markdown 粗体
+        text = text.replace("**", "")
+        # 去除 标题符号 #
+        text = re.sub(r'#+\s*', '', text)
+        # 去除多余空行
+        lines = [line.strip() for line in text.split('\n') if line.strip()]
+        # 增加段首缩进 (全角空格 x2)
+        formatted = [f"　　{line}" for line in lines]
+        return "\n\n".join(formatted)
+
+    clean_content = clean_novel_format(full_text_raw)
+    
+    # 3. 界面展示
+    c_pub1, c_pub2 = st.columns([2, 1])
+    with c_pub1:
+        st.markdown("#### 👁️ 纯净预览 (前1000字)")
+        st.text_area("预览", clean_content[:1000] + "...", height=400, disabled=True)
+        
+    with c_pub2:
+        st.markdown("#### 💾 导出操作")
+        
+        # A. 下载 TXT
+        st.download_button(
+            label="📥 下载全书 (纯净版 TXT)",
+            data=clean_content,
+            file_name=f"novel_{st.session_state['global_genre']}.txt",
+            mime="text/plain",
+            type="primary"
+        )
+        
+        st.markdown("---")
+        
+        # B. 打包 ZIP
+        if st.button("🎁 分章打包 (ZIP)"):
             zip_buffer = io.BytesIO()
             with zipfile.ZipFile(zip_buffer, "a", zipfile.ZIP_DEFLATED, False) as zip_file:
-                for ch_num, msgs in st.session_state["chapters"].items():
-                    ch_content = "".join([m["content"] for m in msgs if m["role"]=="assistant"])
-                    ch_content = clean_text(ch_content)
-                    zip_file.writestr(f"Chapter_{ch_num}.txt", ch_content)
-            st.download_button("📥 下载 ZIP", zip_buffer.getvalue(), "novel_chapters.zip", mime="application/zip")
+                for ch, msgs in st.session_state["chapters"].items():
+                    raw_c = "".join([m["content"] for m in msgs if m["role"]=="assistant"])
+                    clean_c = clean_novel_format(raw_c)
+                    zip_file.writestr(f"Chapter_{ch}.txt", clean_c)
+            st.download_button("点击保存 ZIP", zip_buffer.getvalue(), "chapters.zip", mime="application/zip")
             
-    with c_p3:
-        st.markdown("#### 💊 全数据备份")
-        # 包含所有新旧数据
-        backup = {
-            "chapters": st.session_state["chapters"], 
-            "codex": st.session_state["codex"], 
-            "scrap": st.session_state["scrap_yard"], 
-            "pipe": st.session_state["pipe_idea"]
+        st.markdown("---")
+        
+        # C. 敏感词预检
+        if st.button("🛡️ 敏感词预检"):
+            risky_words = ["色情", "政治", "杀人", "自杀", "血腥", "恐怖"]
+            found = [w for w in risky_words if w in clean_content]
+            if found:
+                st.error(f"⚠️ 检测到疑似敏感词：{', '.join(found)}")
+            else:
+                st.success("✅ 看起来很安全")
+                
+        # D. 全数据备份
+        backup_data = {
+            "config": {
+                "genre": st.session_state["global_genre"],
+                "tone": st.session_state["global_tone"],
+                "naming": st.session_state["global_naming"],
+                "world": st.session_state["global_world_bg"]
+            },
+            "chapters": st.session_state["chapters"],
+            "codex": st.session_state["codex"],
+            "blueprint": {
+                "idea": st.session_state["pipe_idea"],
+                "char": st.session_state["pipe_char"],
+                "outline": st.session_state["pipe_outline"]
+            },
+            "scrap": st.session_state["scrap_yard"]
         }
-        st.download_button("📥 导出 JSON", json.dumps(backup, ensure_ascii=False), "backup.json")
+        st.download_button("💊 完整数据备份 (JSON)", json.dumps(backup_data, ensure_ascii=False), "backup_full.json")

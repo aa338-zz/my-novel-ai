@@ -1,13 +1,17 @@
 import streamlit as st
 from openai import OpenAI
 import json
+import random
+import re
+import io
+import zipfile
 import time
 
 # ==========================================
-# 0. 全局配置 & 核心记忆初始化
+# 0. 全局配置 & 强力初始化
 # ==========================================
 st.set_page_config(
-    page_title="GENESIS · 创世笔 V2", 
+    page_title="GENESIS · 创世笔", 
     page_icon="⚡", 
     layout="wide",
     initial_sidebar_state="expanded"
@@ -15,15 +19,21 @@ st.set_page_config(
 
 def init_session():
     defaults = {
-        # --- 核心写作数据 ---
-        "draft_content": "",       # 左侧：你的草稿/大纲
-        "polished_content": "",    # 右侧：AI精修后的正文
-        "style_guide": "",         # 朋友喂的“大神文风”
+        # --- V1 基础数据 ---
+        "chapters": {1: ""},      # 章节正文 (Key=章号, Value=内容)
+        "current_chapter": 1,
+        "codex": {},              # 设定集
+        "scrap_yard": [],         # 废稿篓
         
-        # --- 状态标记 ---
+        # --- V2 核心工作区 ---
+        "work_draft": "",         # 左栏：当前草稿/大纲
+        "work_result": "",        # 右栏：AI 精修后的结果
+        "style_dna": "",          # 提取的大神文风
+        
+        # --- 系统状态 ---
         "logged_in": False,
-        "first_visit": True,       # 新手引导
-        "history_snapshots": [],
+        "first_visit": True,
+        "daily_target": 3000
     }
     for key, value in defaults.items():
         if key not in st.session_state:
@@ -32,224 +42,331 @@ def init_session():
 init_session()
 
 # ==========================================
-# 1. 样式美化 (去AI味的视觉暗示)
+# 1. 样式美化 (CSS)
 # ==========================================
 st.markdown("""
 <style>
-    .stTextArea textarea {font-size: 16px; line-height: 1.6; font-family: 'SimSun', serif;} 
-    .big-btn {padding: 20px !important; font-size: 20px !important; font-weight: bold !important;}
-    .report-box {background: #f1f3f5; padding: 15px; border-left: 5px solid #fa5252; border-radius: 4px;}
-    .success-box {background: #e6fcf5; padding: 15px; border-left: 5px solid #0ca678; border-radius: 4px;}
+    .stApp {background-color: #f8f9fa; color: #1a1a1a;}
+    
+    /* 按钮样式优化 */
+    .stButton>button {
+        font-weight: 600; border-radius: 8px; transition: all 0.2s;
+    }
+    .big-btn {
+        border: 2px solid #228be6; color: #228be6; 
+        padding: 10px; text-align: center; border-radius: 8px; cursor: pointer;
+        font-weight: bold; margin-bottom: 10px;
+    }
+    .big-btn:hover {background-color: #e7f5ff;}
+
+    /* 文本域优化 - 仿作家软件 */
+    textarea {
+        font-family: 'SimSun', 'Courier New', serif !important; 
+        font-size: 16px !important;
+        line-height: 1.7 !important;
+    }
+    
+    /* 提示框 */
+    .info-box {
+        background: #e7f5ff; border-left: 5px solid #228be6; padding: 15px; border-radius: 4px; font-size: 14px;
+    }
 </style>
 """, unsafe_allow_html=True)
 
 # ==========================================
-# 2. 简易登录 (保留)
+# 2. 登录逻辑
 # ==========================================
 USERS = {"vip": "666", "admin": "admin"} 
 def check_login():
     if not st.session_state["logged_in"]:
         c1, c2, c3 = st.columns([1,1,1])
         with c2:
-            st.title("⚡ 创世笔")
-            st.caption("专为网文大神打造的‘去AI化’辅助终端")
-            pwd = st.text_input("🔑 启动密钥", type="password")
-            if st.button("🚀 进入工作台", use_container_width=True):
-                if pwd in USERS.values():
-                    st.session_state["logged_in"] = True
-                    st.rerun()
-                else:
-                    st.error("密钥错误")
+            st.markdown("<br><br><h1 style='text-align: center;'>⚡ 创世笔 Ultimate</h1>", unsafe_allow_html=True)
+            with st.form("login"):
+                pwd = st.text_input("🔑 通行密钥", type="password", placeholder="输入 666")
+                if st.form_submit_button("🚀 启动引擎", use_container_width=True):
+                    if pwd in USERS.values():
+                        st.session_state["logged_in"] = True
+                        st.rerun()
+                    else:
+                        st.error("密钥错误")
         st.stop()
 check_login()
 
 # ==========================================
-# 3. 侧边栏：喂书 & 参数 (关键！)
+# 3. 侧边栏：指挥塔 (融合版)
 # ==========================================
 with st.sidebar:
-    st.markdown("### 🧬 基因工程 (喂书区)")
-    
-    # API配置
+    st.markdown("### 🎛️ 指挥塔")
     if "DEEPSEEK_API_KEY" in st.secrets:
         api_key = st.secrets["DEEPSEEK_API_KEY"]
         client = OpenAI(api_key=api_key, base_url="https://api.deepseek.com")
-        st.success("🧠 神经网络：在线")
+        st.success("✅ 神经网络：在线")
     else:
-        st.error("🔴 缺 API Key")
+        st.error("🔴 请配置 API Key")
         st.stop()
 
-    st.info("👇 这里是你朋友发挥的地方")
-    uploaded_style = st.file_uploader("📥 投喂大神切片 (.txt)", type=["txt"])
-    
-    if uploaded_style:
-        raw_text = uploaded_style.getvalue().decode("utf-8")
-        if st.button("🧪 提取文风基因"):
-            with st.spinner("正在解析大神节奏..."):
-                # 让AI分析这段文字的“黄金节奏”
-                p = f"分析这段网文的节奏、用词习惯、开篇冲突设置。\n样本：{raw_text[:1500]}\n只输出核心分析结果，不要废话。"
-                resp = client.chat.completions.create(model="deepseek-chat", messages=[{"role":"user","content":p}])
-                st.session_state["style_guide"] = resp.choices[0].message.content
-                st.success("✅ 基因提取完成！已注入润色引擎。")
-
-    if st.session_state["style_guide"]:
-        with st.expander("查看当前文风"):
-            st.caption(st.session_state["style_guide"])
+    # --- 1. 喂书系统 (V2新增) ---
+    with st.expander("🧬 基因工程 (喂书/文风)", expanded=True):
+        st.caption("上传大神作品(.txt)提取文风，去除AI味。")
+        uploaded_style = st.file_uploader("上传参考书", type=["txt"], key="style_up")
+        if uploaded_style:
+            raw_style = uploaded_style.getvalue().decode("utf-8")[:3000]
+            if st.button("🧠 提取文风基因"):
+                with st.spinner("正在解构大神节奏..."):
+                    p = f"分析这段小说的文风。重点分析：1. 开篇节奏（是否黄金三章）。2. 用词习惯（是否精炼）。3. 描写手法。只输出核心特征。\n样本：{raw_style}"
+                    r = client.chat.completions.create(model="deepseek-chat", messages=[{"role":"user","content":p}])
+                    st.session_state["style_dna"] = r.choices[0].message.content
+                    st.success("文风已激活！")
+        
+        if st.session_state["style_dna"]:
+            st.info("🧬 当前已挂载大神文风")
 
     st.divider()
+
+    # --- 2. 章节管理 (V1保留) ---
+    c1, c2 = st.columns([2, 1])
+    with c1:
+        target_chap = st.number_input("章号", min_value=1, value=st.session_state.current_chapter, step=1)
+        if target_chap != st.session_state.current_chapter:
+            # 切换章节时，确保当前章节存在
+            if target_chap not in st.session_state.chapters: 
+                st.session_state.chapters[target_chap] = ""
+            st.session_state.current_chapter = target_chap
+            st.rerun()
+    with c2: 
+        st.caption(f"当前：第 {st.session_state.current_chapter} 章")
     
-    st.markdown("### ⚙️ 润色参数")
-    novel_type = st.selectbox("📚 类型", ["玄幻 | 练气", "都市 | 异能", "悬疑 | 诡秘", "历史 | 争霸"])
-    # 针对你朋友说的“字数控制”
-    target_words = st.number_input("🎯 目标字数", 500, 5000, 2000, step=100)
-    
-    if st.button("❓ 找回新手引导"):
+    # 字数统计
+    curr_txt = st.session_state["chapters"].get(st.session_state.current_chapter, "")
+    st.markdown(f"**📝 本章字数：{len(curr_txt)}**")
+    st.progress(min(len(curr_txt) / st.session_state['daily_target'], 1.0))
+
+    st.divider()
+
+    # --- 3. 设定与废稿 (V1保留) ---
+    with st.expander("📕 设定集"):
+        new_term = st.text_input("词条", placeholder="青莲火")
+        new_desc = st.text_input("描述", placeholder="异火榜19")
+        if st.button("➕ 添加"):
+            st.session_state["codex"][new_term] = new_desc
+            st.success("已录")
+        for k, v in st.session_state["codex"].items():
+            st.markdown(f"**{k}**: {v}")
+
+    with st.expander("🗑️ 废稿篓"):
+        if st.button("📥 将左侧原稿存入废稿"):
+            if st.session_state["work_draft"]:
+                st.session_state["scrap_yard"].append(st.session_state["work_draft"])
+                st.success("存了")
+        if st.session_state["scrap_yard"]:
+            st.markdown("---")
+            for i, s in enumerate(st.session_state["scrap_yard"]):
+                with st.popover(f"查看废稿 {i+1}"):
+                    st.text_area("内容", s, height=200)
+
+    # --- 4. 帮助与重置 ---
+    st.divider()
+    if st.button("❓ 显示新手引导"):
         st.session_state["first_visit"] = True
         st.rerun()
 
 # ==========================================
-# 4. 逻辑核心：去 AI 味的 Prompt
+# 4. 核心逻辑：DeepSeek 导演引擎
 # ==========================================
-def generate_novel(action_type, input_text):
+def run_director(mode, content, user_req, word_limit):
     """
-    核心生成函数
-    action_type: "polish" (润色), "expand" (扩写), "logic" (逻辑梳理)
+    mode: "polish" (润色), "logic" (逻辑), "expand" (续写)
     """
-    
-    # 基础人设：严格禁止 AI 习惯
-    base_system = (
-        f"你是一个起点白金作家。擅长类型：{novel_type}。\n"
+    # 基础 Prompt：去 AI 味核心
+    sys_p = (
+        "你是一个起点白金作家。擅长节奏快、冲突强的网文。\n"
         "【绝对禁令 - 违反直接封号】\n"
         "1. **严禁滥用比喻**：禁止出现'像小刀子一样的风'、'像灌了铅的腿'这种陈词滥调。\n"
         "2. **严禁 AI 标点**：禁止频繁使用破折号 '——'。禁止用冒号引出长段独白。\n"
-        "3. **严禁无效描写**：不要写角色'怎么被扔出去的'，要写他'为什么愤怒'。动作服务于剧情。\n"
-        "4. **开篇法则**：黄金三章原则。开局要有冲突，要有悬念，拒绝慢热。\n"
+        "3. **严禁无效描写**：不要写角色'怎么被扔出去的'（无效动作），要写他'为什么愤怒'（核心冲突）。\n"
+        "4. **黄金三章**：开局必须有危机、有悬念，拒绝慢热。\n"
+        f"【文风参考】\n{st.session_state.get('style_dna', '标准白金文风')}"
     )
 
-    # 注入朋友喂的文风
-    if st.session_state["style_guide"]:
-        base_system += f"\n【模仿文风】\n{st.session_state['style_guide']}\n"
-
-    user_prompt = ""
-    
-    if action_type == "polish":
-        user_prompt = (
+    if mode == "polish":
+        prompt = (
             f"请润色以下片段。去除水词，去除 AI 味，加强冲突和画面感。\n"
-            f"目标字数：{target_words}字左右。\n"
-            f"【原稿】：\n{input_text}"
+            f"目标字数：{word_limit}字左右。\n"
+            f"额外要求：{user_req}\n"
+            f"【原稿】：\n{content}"
         )
-    elif action_type == "logic":
-        user_prompt = (
-            f"不要写正文！分析以下片段的逻辑漏洞，并给出后续剧情的 3 个高潮走向建议。\n"
-            f"【原稿】：\n{input_text}"
+    elif mode == "logic":
+        prompt = (
+            f"不要写正文！请作为主编，分析以下片段的逻辑漏洞，并给出后续剧情的 3 个高潮走向建议。\n"
+            f"【原稿】：\n{content}"
         )
-    
-    # 流式输出
+    elif mode == "expand":
+        prompt = (
+            f"接着以下内容续写。保持节奏紧凑。\n"
+            f"目标字数：{word_limit}字左右。\n"
+            f"剧情指向：{user_req}\n"
+            f"【前文】：\n{content}"
+        )
+
     try:
         stream = client.chat.completions.create(
             model="deepseek-chat",
-            messages=[
-                {"role": "system", "content": base_system},
-                {"role": "user", "content": user_prompt}
-            ],
-            stream=True,
-            temperature=1.3  # 稍微高一点，为了更有创意
+            messages=[{"role":"system","content":sys_p}, {"role":"user","content":prompt}],
+            stream=True, temperature=1.3
         )
         return stream
     except Exception as e:
-        st.error(f"引擎过热：{e}")
+        st.error(f"Error: {e}")
         return None
 
 # ==========================================
-# 5. 主界面：左写右改
+# 5. 主工作区
 # ==========================================
-st.markdown("## ⚡ GENESIS · 创作台")
-
-# 新手引导
 if st.session_state["first_visit"]:
-    st.info("👋 欢迎！左边放你的大纲或废稿，右边 AI 帮你改成大神之作。点击侧边栏可以‘喂书’。")
-    if st.button("我懂了，开始吧"):
+    st.info("👋 欢迎回来！这里已经升级为 V2.0 专业版。左侧写草稿，右侧 AI 精修。点击侧边栏‘喂书’可激活大神文风。")
+    if st.button("明白，开始创作"):
         st.session_state["first_visit"] = False
         st.rerun()
 
-# 双栏布局
-col_left, col_btn, col_right = st.columns([4, 1, 4])
+tab_main, tab_publish = st.tabs(["✍️ 沉浸精修台", "💾 发书控制台"])
 
-with col_left:
-    st.markdown("#### 📝 原稿 / 大纲 / 废稿")
-    draft = st.text_area(
-        "draft_input", 
-        value=st.session_state["draft_content"], 
-        height=600, 
-        placeholder="在这里输入你的想法，比如：\n萧火火被退婚了，他很生气，喊了一句莫欺少年穷。\n(哪怕是流水账也没关系，交给AI去修)",
-        label_visibility="collapsed"
-    )
-    # 实时保存左侧输入，防止丢失
-    st.session_state["draft_content"] = draft
-
-with col_btn:
-    st.markdown("<br><br><br><br>", unsafe_allow_html=True)
+# --- TAB 1: 沉浸精修台 (V2 核心) ---
+with tab_main:
+    st.markdown(f"### 📖 第 {st.session_state.current_chapter} 章 · 创作中")
     
-    # 按钮 1：核心润色
-    if st.button("✨\n注\n入\n灵\n魂", use_container_width=True):
-        if not draft:
-            st.warning("左边没字啊大哥")
-        else:
-            with col_right:
-                st.markdown("#### 💎 大神精修版")
-                st.session_state["polished_content"] = "" # 清空旧的
-                placeholder = st.empty()
-                full_response = ""
-                
-                stream = generate_novel("polish", draft)
-                if stream:
-                    for chunk in stream:
-                        if chunk.choices[0].delta.content:
-                            txt = chunk.choices[0].delta.content
-                            full_response += txt
-                            placeholder.markdown(full_response + " ▌")
-                    placeholder.markdown(full_response)
-                    st.session_state["polished_content"] = full_response
-                    st.success("润色完成！")
-
-    st.markdown("<br>", unsafe_allow_html=True)
-
-    # 按钮 2：逻辑诊断
-    if st.button("🧠\n逻\n辑\n诊\n断", use_container_width=True):
-        if not draft: st.warning("没内容")
-        else:
-            with col_right:
-                st.markdown("#### 🩺 剧情诊断书")
-                stream = generate_novel("logic", draft)
-                st.write_stream(stream)
-
-with col_right:
-    # 如果没生成，显示标题；如果生成了，内容在上面按钮回调里已经显示了
-    if not st.session_state["polished_content"]:
-        st.markdown("#### 💎 大神精修版 (等待生成...)")
-        st.info("点击中间的按钮，AI 将在这里重写你的故事。")
-    else:
-        # 这里是为了刷新后内容不丢失
-        # 注意：实际流式输出在按钮里，这里是用来持久化显示的
-        st.text_area(
-            "result_display",
-            value=st.session_state["polished_content"],
-            height=600,
-            label_visibility="collapsed"
+    # 布局：左（草稿） - 中（控制） - 右（成品）
+    c_left, c_mid, c_right = st.columns([4, 1, 4])
+    
+    # 1. 左侧：原稿区
+    with c_left:
+        st.markdown("#### 📝 草稿 / 大纲 / 废料")
+        st.caption("随便写，流水账也没关系，逻辑通就行。")
+        draft_in = st.text_area(
+            "Draft", 
+            value=st.session_state["work_draft"], 
+            height=600, 
+            label_visibility="collapsed",
+            placeholder="在此输入剧情片段..."
         )
-        if st.button("📋 复制结果"):
-            st.toast("请手动全选复制 (浏览器限制)", icon="⚠️")
+        st.session_state["work_draft"] = draft_in # 实时保存
 
-# ==========================================
-# 6. 底部工具栏
-# ==========================================
-st.markdown("---")
-c1, c2, c3 = st.columns(3)
-with c1:
-    st.caption(f"当前模式：{novel_type}")
-with c2:
-    if st.session_state["style_guide"]:
-        st.caption("🧬 文风挂载：已激活")
-    else:
-        st.caption("🧬 文风挂载：无 (使用默认白金模式)")
-with c3:
-    st.caption(f"DeepSeek 引擎就绪")
+    # 2. 中间：控制台
+    with c_mid:
+        st.markdown("<br><br>", unsafe_allow_html=True)
+        
+        # 参数控制
+        target_w = st.number_input("字数", 100, 5000, 1000, step=100, label_visibility="collapsed")
+        user_req = st.text_input("要求", placeholder="如：写恐怖点", label_visibility="collapsed")
+        
+        st.markdown("---")
+        
+        # 核心按钮群
+        if st.button("✨\n润\n色", use_container_width=True, help="将草稿转化为正文"):
+            if not draft_in: st.toast("左边没字啊！", icon="😫")
+            else:
+                with c_right:
+                    st.session_state["work_result"] = "" # 清空旧的
+                    st.markdown("#### 💎 大神精修版")
+                    placeholder = st.empty()
+                    full_text = ""
+                    stream = run_director("polish", draft_in, user_req, target_w)
+                    if stream:
+                        for chunk in stream:
+                            if chunk.choices[0].delta.content:
+                                txt = chunk.choices[0].delta.content
+                                full_text += txt
+                                placeholder.markdown(full_text + " ▌")
+                        placeholder.markdown(full_text)
+                        st.session_state["work_result"] = full_text
+
+        st.markdown("<br>", unsafe_allow_html=True)
+
+        if st.button("🧠\n逻\n辑", use_container_width=True, help="分析逻辑漏洞"):
+             if not draft_in: st.toast("没内容分析啥？", icon="🤔")
+             else:
+                with c_right:
+                    st.markdown("#### 🩺 剧情诊断")
+                    stream = run_director("logic", draft_in, "", 500)
+                    st.write_stream(stream)
+
+        st.markdown("<br>", unsafe_allow_html=True)
+        
+        if st.button("🚀\n续\n写", use_container_width=True, help="基于左侧内容往下编"):
+             if not draft_in: st.toast("给个开头啊", icon="😶")
+             else:
+                with c_right:
+                    st.markdown("#### 🚀 续写结果")
+                    stream = run_director("expand", draft_in, user_req, target_w)
+                    st.write_stream(stream)
+
+    # 3. 右侧：成品区
+    with c_right:
+        # 如果还没生成，显示当前章节的已保存内容，或者提示
+        if not st.session_state["work_result"]:
+            st.markdown("#### 💎 大神精修版")
+            st.info("点击中间按钮，AI 将在此生成。")
+        else:
+            # 如果有生成结果，显示结果
+            st.markdown("#### 💎 大神精修版 (未保存)")
+            st.text_area("Result", value=st.session_state["work_result"], height=550, label_visibility="collapsed")
+            
+            # 保存按钮
+            if st.button("💾 采纳并追加到本章", use_container_width=True, type="primary"):
+                # 将润色好的内容追加到 chapters 存储中
+                if st.session_state["current_chapter"] not in st.session_state["chapters"]:
+                    st.session_state["chapters"][st.session_state["current_chapter"]] = ""
+                
+                st.session_state["chapters"][st.session_state["current_chapter"]] += "\n\n" + st.session_state["work_result"]
+                
+                # 清空工作区，方便下一段
+                st.session_state["work_result"] = "" 
+                st.session_state["work_draft"] = ""
+                st.success("已写入！请在下方查看全章预览。")
+                time.sleep(1)
+                st.rerun()
+
+    # --- 全章预览 ---
+    st.divider()
+    with st.expander(f"📜 第 {st.session_state.current_chapter} 章 · 全文预览 (可手动编辑)", expanded=True):
+        # 允许用户最后手动修改全章
+        current_full_text = st.session_state["chapters"].get(st.session_state.current_chapter, "")
+        new_full_text = st.text_area("Chapter Edit", value=current_full_text, height=300, label_visibility="collapsed")
+        if new_full_text != current_full_text:
+            st.session_state["chapters"][st.session_state.current_chapter] = new_full_text
+
+# --- TAB 2: 发书控制台 (V1保留) ---
+with tab_publish:
+    st.info("准备发布？这里可以将所有章节打包。")
+    
+    full_book_text = ""
+    for ch_num in sorted(st.session_state["chapters"].keys()):
+        content = st.session_state["chapters"][ch_num]
+        full_book_text += f"\n\n### 第 {ch_num} 章 ###\n\n{content}"
+    
+    c_p1, c_p2 = st.columns(2)
+    with c_p1:
+        st.markdown("#### 🧹 纯净 TXT (单文件)")
+        # 清洗 Markdown 符号
+        clean_text = full_book_text.replace("**", "").replace("##", "")
+        st.download_button("📥 下载全书", clean_text, "novel_full.txt")
+        
+    with c_p2:
+        st.markdown("#### 📦 分章打包 (ZIP)")
+        if st.button("🎁 生成压缩包"):
+            zip_buffer = io.BytesIO()
+            with zipfile.ZipFile(zip_buffer, "a", zipfile.ZIP_DEFLATED, False) as zip_file:
+                for ch_num, content in st.session_state["chapters"].items():
+                    clean_c = content.replace("**", "").replace("##", "")
+                    zip_file.writestr(f"Chapter_{ch_num}.txt", clean_c)
+            st.download_button("📥 下载 ZIP", zip_buffer.getvalue(), "novel_chapters.zip", mime="application/zip")
+    
+    st.divider()
+    st.markdown("#### 💊 备份数据")
+    st.caption("导出包含设定集、废稿在内的所有数据。")
+    backup = {
+        "chapters": st.session_state["chapters"],
+        "codex": st.session_state["codex"],
+        "scrap": st.session_state["scrap_yard"]
+    }
+    st.download_button("📥 导出备份 (.json)", json.dumps(backup, ensure_ascii=False), "backup.json")

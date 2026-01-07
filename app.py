@@ -29,6 +29,7 @@ def init_session():
         "work_draft": "",         # 左栏：当前草稿/大纲
         "work_result": "",        # 右栏：AI 精修后的结果
         "style_dna": "",          # 提取的大神文风
+        "final_genre": "东方玄幻", # 最终确定的流派
         
         # --- 系统状态 ---
         "logged_in": False,
@@ -94,7 +95,7 @@ def check_login():
 check_login()
 
 # ==========================================
-# 3. 侧边栏：指挥塔 (融合版)
+# 3. 侧边栏：指挥塔 (全流派升级版)
 # ==========================================
 with st.sidebar:
     st.markdown("### 🎛️ 指挥塔")
@@ -105,10 +106,49 @@ with st.sidebar:
     else:
         st.error("🔴 请配置 API Key")
         st.stop()
+    
+    st.divider()
 
-    # --- 1. 喂书系统 (V2新增) ---
-    with st.expander("🧬 基因工程 (喂书/文风)", expanded=True):
-        st.caption("上传大神作品(.txt)提取文风，去除AI味。")
+    # --- 1. 核心参数区 (流派 & 禁词) ---
+    st.markdown("#### 📚 设定控制台")
+    
+    # 全流派列表
+    genre_list = [
+        "东方玄幻 | 异世大陆", "东方玄幻 | 高武世界", "东方玄幻 | 王朝争霸",
+        "西方奇幻 | 剑与魔法", "西方奇幻 | 领主种田", "西方奇幻 | 黑暗幻想",
+        "仙侠修真 | 古典仙侠", "仙侠修真 | 现代修真", "仙侠修真 | 洪荒封神",
+        "都市生活 | 都市异能", "都市生活 | 娱乐明星", "都市生活 | 商战职场", "都市生活 | 豪门世家",
+        "历史军事 | 架空历史", "历史军事 | 穿越皇朝", "历史军事 | 谍战特工",
+        "游戏竞技 | 虚拟网游", "游戏竞技 | 第四天灾", "游戏竞技 | 电子竞技",
+        "科幻末世 | 星际文明", "科幻末世 | 赛博朋克", "科幻末世 | 进化变异",
+        "悬疑灵异 | 恐怖惊悚", "悬疑灵异 | 侦探推理", "悬疑灵异 | 盗墓探险",
+        "轻小说 | 衍生同人", "轻小说 | 原创轻小", "轻小说 | 搞笑吐槽",
+        "女频 | 古代言情", "女频 | 现代言情", "女频 | 穿越重生", "女频 | 宫斗宅斗",
+        "自定义 (手动输入)"
+    ]
+    
+    sel_genre = st.selectbox("选择流派", genre_list, index=0)
+    
+    # 自定义处理逻辑
+    if "自定义" in sel_genre:
+        st.session_state["final_genre"] = st.text_input("✍️ 输入你的流派", placeholder="例如：蒸汽朋克克苏鲁")
+    else:
+        st.session_state["final_genre"] = sel_genre
+
+    # 禁词黑名单
+    st.markdown("#### 🚫 禁词黑名单 (反AI味)")
+    banned_words_str = st.text_area(
+        "禁止AI使用的词 (逗号分隔)", 
+        value="像小刀子,像灌了铅,——,紧接着,旋即,嘴角勾起,淡淡的", 
+        height=70,
+        help="AI 生成时如果包含这些词，会被判定为违规。"
+    )
+
+    st.divider()
+
+    # --- 2. 喂书系统 (V2新增) ---
+    with st.expander("🧬 基因工程 (喂书/文风)", expanded=False):
+        st.caption("上传大神作品(.txt)提取文风。")
         uploaded_style = st.file_uploader("上传参考书", type=["txt"], key="style_up")
         if uploaded_style:
             raw_style = uploaded_style.getvalue().decode("utf-8")[:3000]
@@ -122,29 +162,25 @@ with st.sidebar:
         if st.session_state["style_dna"]:
             st.info("🧬 当前已挂载大神文风")
 
-    st.divider()
+    # --- 3. 章节管理 (V1保留) ---
+    with st.expander("📑 章节管理", expanded=True):
+        c1, c2 = st.columns([2, 1])
+        with c1:
+            target_chap = st.number_input("章号", min_value=1, value=st.session_state.current_chapter, step=1)
+            if target_chap != st.session_state.current_chapter:
+                if target_chap not in st.session_state.chapters: 
+                    st.session_state.chapters[target_chap] = ""
+                st.session_state.current_chapter = target_chap
+                st.rerun()
+        with c2: 
+            st.caption(f"当前：第 {st.session_state.current_chapter} 章")
+        
+        # 字数统计
+        curr_txt = st.session_state["chapters"].get(st.session_state.current_chapter, "")
+        st.progress(min(len(curr_txt) / st.session_state['daily_target'], 1.0))
+        st.caption(f"{len(curr_txt)} / {st.session_state['daily_target']} 字")
 
-    # --- 2. 章节管理 (V1保留) ---
-    c1, c2 = st.columns([2, 1])
-    with c1:
-        target_chap = st.number_input("章号", min_value=1, value=st.session_state.current_chapter, step=1)
-        if target_chap != st.session_state.current_chapter:
-            # 切换章节时，确保当前章节存在
-            if target_chap not in st.session_state.chapters: 
-                st.session_state.chapters[target_chap] = ""
-            st.session_state.current_chapter = target_chap
-            st.rerun()
-    with c2: 
-        st.caption(f"当前：第 {st.session_state.current_chapter} 章")
-    
-    # 字数统计
-    curr_txt = st.session_state["chapters"].get(st.session_state.current_chapter, "")
-    st.markdown(f"**📝 本章字数：{len(curr_txt)}**")
-    st.progress(min(len(curr_txt) / st.session_state['daily_target'], 1.0))
-
-    st.divider()
-
-    # --- 3. 设定与废稿 (V1保留) ---
+    # --- 4. 设定与废稿 (V1保留) ---
     with st.expander("📕 设定集"):
         new_term = st.text_input("词条", placeholder="青莲火")
         new_desc = st.text_input("描述", placeholder="异火榜19")
@@ -155,7 +191,7 @@ with st.sidebar:
             st.markdown(f"**{k}**: {v}")
 
     with st.expander("🗑️ 废稿篓"):
-        if st.button("📥 将左侧原稿存入废稿"):
+        if st.button("📥 存废稿"):
             if st.session_state["work_draft"]:
                 st.session_state["scrap_yard"].append(st.session_state["work_draft"])
                 st.success("存了")
@@ -165,33 +201,30 @@ with st.sidebar:
                 with st.popover(f"查看废稿 {i+1}"):
                     st.text_area("内容", s, height=200)
 
-    # --- 4. 帮助与重置 ---
-    st.divider()
-    if st.button("❓ 显示新手引导"):
-        st.session_state["first_visit"] = True
-        st.rerun()
-
 # ==========================================
-# 4. 核心逻辑：DeepSeek 导演引擎
+# 4. 核心逻辑：DeepSeek 导演引擎 (带禁词)
 # ==========================================
-def run_director(mode, content, user_req, word_limit):
+def run_director(mode, content, user_req, word_limit, banned_words):
     """
     mode: "polish" (润色), "logic" (逻辑), "expand" (续写)
     """
-    # 基础 Prompt：去 AI 味核心
+    genre = st.session_state.get("final_genre", "东方玄幻")
+    style_dna = st.session_state.get("style_dna", "标准白金文风")
+    
+    # 基础 Prompt：加入流派 + 禁词
     sys_p = (
-        "你是一个起点白金作家。擅长节奏快、冲突强的网文。\n"
+        f"你是一个起点白金作家。当前创作类型：【{genre}】。\n"
         "【绝对禁令 - 违反直接封号】\n"
-        "1. **严禁滥用比喻**：禁止出现'像小刀子一样的风'、'像灌了铅的腿'这种陈词滥调。\n"
+        f"1. **黑名单词汇（严禁出现）**：{banned_words}。\n"
         "2. **严禁 AI 标点**：禁止频繁使用破折号 '——'。禁止用冒号引出长段独白。\n"
         "3. **严禁无效描写**：不要写角色'怎么被扔出去的'（无效动作），要写他'为什么愤怒'（核心冲突）。\n"
         "4. **黄金三章**：开局必须有危机、有悬念，拒绝慢热。\n"
-        f"【文风参考】\n{st.session_state.get('style_dna', '标准白金文风')}"
+        f"【文风参考】\n{style_dna}"
     )
 
     if mode == "polish":
         prompt = (
-            f"请润色以下片段。去除水词，去除 AI 味，加强冲突和画面感。\n"
+            f"请润色以下片段。去除水词，严格避开黑名单词汇，加强【{genre}】特有的氛围。\n"
             f"目标字数：{word_limit}字左右。\n"
             f"额外要求：{user_req}\n"
             f"【原稿】：\n{content}"
@@ -203,7 +236,7 @@ def run_director(mode, content, user_req, word_limit):
         )
     elif mode == "expand":
         prompt = (
-            f"接着以下内容续写。保持节奏紧凑。\n"
+            f"接着以下内容续写。保持节奏紧凑，符合【{genre}】风格。\n"
             f"目标字数：{word_limit}字左右。\n"
             f"剧情指向：{user_req}\n"
             f"【前文】：\n{content}"
@@ -224,7 +257,7 @@ def run_director(mode, content, user_req, word_limit):
 # 5. 主工作区
 # ==========================================
 if st.session_state["first_visit"]:
-    st.info("👋 欢迎回来！这里已经升级为 V2.0 专业版。左侧写草稿，右侧 AI 精修。点击侧边栏‘喂书’可激活大神文风。")
+    st.info(f"👋 欢迎回来！当前模式：{st.session_state.get('final_genre', '未设定')}。左侧写草稿，右侧 AI 精修。")
     if st.button("明白，开始创作"):
         st.session_state["first_visit"] = False
         st.rerun()
@@ -233,7 +266,7 @@ tab_main, tab_publish = st.tabs(["✍️ 沉浸精修台", "💾 发书控制台
 
 # --- TAB 1: 沉浸精修台 (V2 核心) ---
 with tab_main:
-    st.markdown(f"### 📖 第 {st.session_state.current_chapter} 章 · 创作中")
+    st.markdown(f"### 📖 第 {st.session_state.current_chapter} 章 · {st.session_state['final_genre']}")
     
     # 布局：左（草稿） - 中（控制） - 右（成品）
     c_left, c_mid, c_right = st.columns([4, 1, 4])
@@ -256,8 +289,8 @@ with tab_main:
         st.markdown("<br><br>", unsafe_allow_html=True)
         
         # 参数控制
-        target_w = st.number_input("字数", 100, 5000, 1000, step=100, label_visibility="collapsed")
-        user_req = st.text_input("要求", placeholder="如：写恐怖点", label_visibility="collapsed")
+        target_w = st.number_input("字数", 100, 5000, 1500, step=100, label_visibility="collapsed")
+        user_req = st.text_input("要求", placeholder="如：更有画面感", label_visibility="collapsed")
         
         st.markdown("---")
         
@@ -270,7 +303,7 @@ with tab_main:
                     st.markdown("#### 💎 大神精修版")
                     placeholder = st.empty()
                     full_text = ""
-                    stream = run_director("polish", draft_in, user_req, target_w)
+                    stream = run_director("polish", draft_in, user_req, target_w, banned_words_str)
                     if stream:
                         for chunk in stream:
                             if chunk.choices[0].delta.content:
@@ -287,7 +320,7 @@ with tab_main:
              else:
                 with c_right:
                     st.markdown("#### 🩺 剧情诊断")
-                    stream = run_director("logic", draft_in, "", 500)
+                    stream = run_director("logic", draft_in, "", 500, banned_words_str)
                     st.write_stream(stream)
 
         st.markdown("<br>", unsafe_allow_html=True)
@@ -297,7 +330,7 @@ with tab_main:
              else:
                 with c_right:
                     st.markdown("#### 🚀 续写结果")
-                    stream = run_director("expand", draft_in, user_req, target_w)
+                    stream = run_director("expand", draft_in, user_req, target_w, banned_words_str)
                     st.write_stream(stream)
 
     # 3. 右侧：成品区
